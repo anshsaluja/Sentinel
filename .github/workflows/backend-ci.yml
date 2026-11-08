@@ -8,16 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    services:
-      mongodb:
-        image: mongo:7.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -26,6 +16,31 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: backend/pom.xml
-      - name: Compile and test backend
+      - name: Start MongoDB replica set for transactional tests
+        run: |
+          docker run -d --name sentinel-ci-mongo -p 127.0.0.1:27017:27017 mongo:7.0 mongod --replSet rs0 --bind_ip_all
+          for attempt in $(seq 1 40); do
+            if docker exec sentinel-ci-mongo mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)' >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then docker logs sentinel-ci-mongo; exit 1; fi
+            sleep 2
+          done
+          docker exec sentinel-ci-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})'
+          for attempt in $(seq 1 40); do
+            if docker exec sentinel-ci-mongo mongosh --quiet --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' >/dev/null 2>&1; then
+              echo "MongoDB primary ready"
+              exit 0
+            fi
+            if [ "$attempt" -eq 40 ]; then docker logs sentinel-ci-mongo; exit 1; fi
+            sleep 2
+          done
+      - name: Compile, unit test, and integration test backend
         working-directory: backend
+        env:
+          SENTINEL_MONGO_IT: 'true'
+          SPRING_DATA_MONGODB_URI: mongodb://localhost:27017/sentinel_ci?replicaSet=rs0&directConnection=true
         run: mvn --batch-mode --no-transfer-progress verify
+      - name: Print MongoDB diagnostics on failure
+        if: failure()
+        run: docker logs sentinel-ci-mongo || true
