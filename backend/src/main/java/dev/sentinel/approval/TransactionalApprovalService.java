@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.util.Objects;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -25,6 +26,7 @@ public class TransactionalApprovalService {
     private final ApprovalAuditService coordinator = new ApprovalAuditService();
     private final Clock clock;
 
+    @Autowired
     public TransactionalApprovalService(ApprovalRepository approvals, AuditRepository audits,
                                         AuditHistoryService history) {
         this(approvals, audits, history, Clock.systemUTC());
