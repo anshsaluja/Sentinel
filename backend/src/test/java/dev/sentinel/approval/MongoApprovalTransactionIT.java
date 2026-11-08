@@ -45,9 +45,13 @@ class MongoApprovalTransactionIT {
     }
 
     private ApprovalDocument pending(String id) {
-        return approvals.save(new ApprovalDocument(new ApprovalWorkflow.Request(
+        var document = new ApprovalDocument(new ApprovalWorkflow.Request(
                 id, "tenant-integration", "alice", null, "ledger", "Quarterly review",
-                ApprovalWorkflow.Status.PENDING, 0, Instant.parse("2026-11-08T10:00:00Z"))));
+                ApprovalWorkflow.Status.PENDING, 0, Instant.parse("2026-11-08T10:00:00Z")));
+        // A new Spring Data @Version entity must have a null version so insert
+        // initializes it to zero; version 0 is treated as an existing document.
+        document.version = null;
+        return approvals.save(document);
     }
 
     @Test
