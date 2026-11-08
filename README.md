@@ -33,6 +33,12 @@ Requires Java 21, Maven, and a running OIDC issuer such as Keycloak.
 
 For simulation, send `{"subjects":[{"userId":"alice","request":{...}}],"before":[...],"after":[...]}`, where all tenant IDs equal the authenticated token's `tenant_id`.
 
+## MongoDB-backed trusted policy foundation
+
+Tenant-scoped policy persistence is now implemented in `StoredPolicy`, `PolicyRepository`, and `TrustedPolicyService`. The service retrieves enabled rules from MongoDB using tenant/resource/action filters and fails closed if a repository returns foreign-tenant data. The legacy preview endpoints **still accept caller-supplied rules**; the trusted service is not yet connected to an authenticated enforcement endpoint. The local `compose.yaml` starts MongoDB and Keycloak but does not yet import a Keycloak realm or bootstrap test identities.
+
+For local services, copy `.env.example` to `.env`, supply a unique `KEYCLOAK_ADMIN_PASSWORD`, and run `docker compose up -d`. The issuer realm `sentinel` must still be configured in Keycloak. Do not use this development Compose stack on a public host. `mvn verify` requires a running MongoDB instance for Spring application-context tests.
+
 ## Roadmap
 
 - MongoDB-backed tenant-scoped identity/resource/policy repository and trusted rule loading.
