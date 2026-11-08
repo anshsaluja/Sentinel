@@ -36,7 +36,7 @@ class RealmSecurityTests(unittest.TestCase):
         client = self.clients["sentinel-angular"]
         self.assertEqual(
             set(client["redirectUris"]),
-            {"http://localhost:4200/*", "http://127.0.0.1:4200/*"},
+            {"http://localhost:4200/", "http://127.0.0.1:4200/"},
         )
         self.assertEqual(
             set(client["webOrigins"]),
@@ -112,6 +112,7 @@ class RealmSecurityTests(unittest.TestCase):
                     self.assertNotIn("?", uri)
                     self.assertNotIn("#", uri)
                     self.assertNotIn("0.0.0.0", uri)
+                    self.assertNotIn("*", uri, "OAuth callback must be an exact URI")
                 self.assertNotIn("+", client["webOrigins"])
                 self.assertNotIn("*", client["webOrigins"])
 
