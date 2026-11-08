@@ -55,6 +55,26 @@ class RealmSecurityTests(unittest.TestCase):
         for client in self.clients.values():
             self.assertIn("sentinel-tenant", client["defaultClientScopes"])
 
+    def test_cli_callback_is_exact_and_browser_origins_are_disabled(self):
+        client = self.clients["sentinel-local-cli"]
+        self.assertEqual(
+            set(client["redirectUris"]),
+            {"http://127.0.0.1:8765/callback", "http://localhost:8765/callback"},
+        )
+        self.assertEqual(client["webOrigins"], [])
+
+    def test_reviewer_and_admin_roles_are_declared(self):
+        roles = {role["name"] for role in self.realm["roles"]["realm"]}
+        self.assertIn("sentinel-reviewer", roles)
+        self.assertIn("sentinel-admin", roles)
+
+    def test_import_contains_no_users_or_client_secrets(self):
+        self.assertNotIn("users", self.realm)
+        for client in self.clients.values():
+            with self.subTest(client=client["clientId"]):
+                self.assertNotIn("secret", client)
+                self.assertNotIn("clientAuthenticatorType", client)
+
 
 if __name__ == "__main__":
     unittest.main()
