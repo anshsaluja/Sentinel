@@ -1,0 +1,68 @@
+{
+  "realm": "sentinel",
+  "enabled": true,
+  "displayName": "Sentinel Local Development",
+  "roles": {
+    "realm": [
+      {
+        "name": "sentinel-reviewer",
+        "description": "Can review access approval requests"
+      },
+      {
+        "name": "sentinel-admin",
+        "description": "Local tenant administrator"
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "sentinel-tenant",
+      "description": "Tenant claim for local development clients",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "local-demo",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "sentinel-local-cli",
+      "name": "Sentinel local CLI (public PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:8765/callback",
+        "http://localhost:8765/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "sentinel-tenant"
+      ]
+    }
+  ]
+}
