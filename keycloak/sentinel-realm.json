@@ -63,6 +63,31 @@
       "defaultClientScopes": [
         "sentinel-tenant"
       ]
+    },
+    {
+      "clientId": "sentinel-angular",
+      "name": "Sentinel local Angular SPA (public PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://127.0.0.1:4200/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4200",
+        "http://127.0.0.1:4200"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "sentinel-tenant"
+      ]
     }
   ]
 }
