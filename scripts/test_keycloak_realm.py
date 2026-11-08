@@ -75,6 +75,46 @@ class RealmSecurityTests(unittest.TestCase):
                 self.assertNotIn("secret", client)
                 self.assertNotIn("clientAuthenticatorType", client)
 
+    def test_tenant_mapper_is_explicitly_local_and_not_in_identity_tokens(self):
+        scopes = [scope for scope in self.realm["clientScopes"] if scope["name"] == "sentinel-tenant"]
+        self.assertEqual(len(scopes), 1)
+        scope = scopes[0]
+        self.assertEqual(scope["protocol"], "openid-connect")
+        self.assertEqual(len(scope["protocolMappers"]), 1)
+        mapper = scope["protocolMappers"][0]
+        self.assertEqual(mapper["protocolMapper"], "oidc-hardcoded-claim-mapper")
+        config = mapper["config"]
+        self.assertEqual(config["claim.value"], "local-demo")
+        self.assertEqual(config["jsonType.label"], "String")
+        self.assertEqual(config["userinfo.token.claim"], "false")
+        self.assertEqual(config["access.token.claim"], "true")
+        self.assertEqual(config["id.token.claim"], "false")
+
+    def test_privileged_roles_are_not_granted_by_default(self):
+        privileged = {"sentinel-reviewer", "sentinel-admin"}
+        default_roles = self.realm.get("defaultRoles", [])
+        self.assertTrue(privileged.isdisjoint(default_roles))
+        for role in self.realm["roles"]["realm"]:
+            if role["name"] in privileged:
+                self.assertFalse(role.get("composite", False))
+                self.assertFalse(role.get("clientRole", False))
+        self.assertNotIn("defaultRole", self.realm)
+        for client in self.clients.values():
+            self.assertNotIn("defaultRoles", client)
+
+    def test_oauth_clients_do_not_allow_unrestricted_redirects(self):
+        for client in self.clients.values():
+            with self.subTest(client=client["clientId"]):
+                self.assertEqual(client["protocol"], "openid-connect")
+                self.assertTrue(client["redirectUris"])
+                for uri in client["redirectUris"]:
+                    self.assertTrue(uri.startswith(("http://localhost:", "http://127.0.0.1:")))
+                    self.assertNotIn("?", uri)
+                    self.assertNotIn("#", uri)
+                    self.assertNotIn("0.0.0.0", uri)
+                self.assertNotIn("+", client["webOrigins"])
+                self.assertNotIn("*", client["webOrigins"])
+
 
 if __name__ == "__main__":
     unittest.main()
