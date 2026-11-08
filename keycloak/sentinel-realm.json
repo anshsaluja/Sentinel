@@ -89,5 +89,10 @@
         "sentinel-tenant"
       ]
     }
-  ]
+  ],
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900
 }
