@@ -1,3 +1,4 @@
+import { SentinelApiClient } from './sentinel-api';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
@@ -35,7 +36,18 @@ const authConfig: AuthConfig = {
           <h2>Welcome to Sentinel</h2>
           <p>Signed in as <code>{{ displayName() }}</code>.</p>
           <p>Tenant: <code>{{ tenantId() }}</code></p>
-          <p>Policy simulation and approval workflows will appear here when their authenticated APIs are integrated.</p>
+          <section aria-labelledby="preview-heading">
+            <h3 id="preview-heading">Access policy preview</h3>
+            <p>Run a read-only evaluation and before/after simulation using sample rules for the local-demo tenant. These previews do not grant or change real permissions.</p>
+            <button [disabled]="previewLoading()" (click)="runEvaluation()">Evaluate sample access</button>
+            <button [disabled]="previewLoading()" (click)="runSimulation()">Simulate removal of access</button>
+            @if (previewLoading()) { <p role="status">Running preview…</p> }
+            @if (previewError()) { <p role="alert">{{ previewError() }}</p> }
+            @if (previewResult()) {
+              <h4>Backend response</h4>
+              <pre aria-live="polite">{{ previewResult() }}</pre>
+            }
+          </section>
           <button (click)="logout()">Sign out</button>
         } @else {
           <h2>Secure workspace</h2>
@@ -53,6 +65,51 @@ class AppComponent implements OnInit {
   readonly authenticated = signal(false);
   readonly displayName = signal('');
   readonly tenantId = signal('');
+  readonly previewLoading = signal(false);
+  readonly previewError = signal('');
+  readonly previewResult = signal('');
+  private readonly api = new SentinelApiClient(() => this.oauth.getAccessToken() || null);
+
+  private readonly sampleRequest = {
+    tenantId: 'local-demo',
+    resourceId: 'ledger',
+    action: 'read',
+    roles: ['analyst'],
+    attributes: { department: 'finance' },
+  };
+  private readonly sampleRule = {
+    ...this.sampleRequest,
+    effect: 'ALLOW' as const,
+  };
+
+  async runEvaluation(): Promise<void> {
+    await this.runPreview(() => this.api.evaluate({
+      request: this.sampleRequest,
+      rules: [this.sampleRule],
+    }));
+  }
+
+  async runSimulation(): Promise<void> {
+    await this.runPreview(() => this.api.simulate({
+      subjects: [{ userId: 'sample-analyst', request: this.sampleRequest }],
+      before: [this.sampleRule],
+      after: [],
+    }));
+  }
+
+  private async runPreview(operation: () => Promise<unknown>): Promise<void> {
+    this.previewLoading.set(true);
+    this.previewError.set('');
+    this.previewResult.set('');
+    try {
+      const response = await operation();
+      this.previewResult.set(JSON.stringify(response, null, 2) ?? 'Empty response');
+    } catch (error) {
+      this.previewError.set(error instanceof Error ? error.message : 'Preview failed');
+    } finally {
+      this.previewLoading.set(false);
+    }
+  }
 
   ngOnInit(): void { void this.initialize(); }
 
@@ -79,7 +136,7 @@ class AppComponent implements OnInit {
   }
 
   login(): void { this.oauth.initCodeFlow(); }
-  logout(): void { this.oauth.logOut(); this.authenticated.set(false); }
+  logout(): void { this.oauth.logOut(); this.authenticated.set(false); this.previewResult.set(''); this.previewError.set(''); }
 }
 
 bootstrapApplication(AppComponent, {
