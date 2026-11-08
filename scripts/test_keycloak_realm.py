@@ -13,6 +13,13 @@ class RealmSecurityTests(unittest.TestCase):
         cls.realm = json.loads(REALM_PATH.read_text(encoding="utf-8"))
         cls.clients = {client["clientId"]: client for client in cls.realm["clients"]}
 
+    def test_login_brute_force_protection_is_bounded(self):
+        self.assertTrue(self.realm["bruteForceProtected"])
+        self.assertFalse(self.realm["permanentLockout"])
+        self.assertEqual(self.realm["failureFactor"], 5)
+        self.assertGreaterEqual(self.realm["waitIncrementSeconds"], 30)
+        self.assertLessEqual(self.realm["maxFailureWaitSeconds"], 900)
+
     def test_realm_and_clients_are_enabled(self):
         self.assertEqual(self.realm["realm"], "sentinel")
         self.assertTrue(self.realm["enabled"])
