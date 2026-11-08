@@ -1,0 +1,25 @@
+# Local development only. No passwords or tokens are committed.
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - sentinel-mongodb:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1}).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}
+volumes:
+  sentinel-mongodb:
