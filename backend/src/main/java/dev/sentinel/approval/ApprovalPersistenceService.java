@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Persists approval state transitions using Mongo @Version optimistic locking.
@@ -19,6 +20,7 @@ public class ApprovalPersistenceService {
     private final ApprovalWorkflow workflow = new ApprovalWorkflow();
     private final Clock clock;
 
+    @Autowired
     public ApprovalPersistenceService(ApprovalRepository repository) {
         this(repository, Clock.systemUTC());
     }
