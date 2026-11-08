@@ -37,7 +37,7 @@ For simulation, send `{"subjects":[{"userId":"alice","request":{...}}],"before":
 
 Tenant-scoped policy persistence is now implemented in `StoredPolicy`, `PolicyRepository`, and `TrustedPolicyService`. The service retrieves enabled rules from MongoDB using tenant/resource/action filters and fails closed if a repository returns foreign-tenant data. The legacy preview endpoints **still accept caller-supplied rules**; the trusted service is not yet connected to an authenticated enforcement endpoint. The local `compose.yaml` starts MongoDB and Keycloak but does not yet import a Keycloak realm or bootstrap test identities.
 
-For local services, copy `.env.example` to `.env`, supply a unique `KEYCLOAK_ADMIN_PASSWORD`, and run `docker compose up -d`. The issuer realm `sentinel` must still be configured in Keycloak. Do not use this development Compose stack on a public host. `mvn verify` requires a running MongoDB instance for Spring application-context tests.
+For local services, copy `.env.example` to `.env`, supply a unique `KEYCLOAK_ADMIN_PASSWORD`, and run `docker compose up -d`. **Before running transactional approval flows**, initialize the MongoDB single-node replica set with `bash scripts/init-mongo-replica.sh` from the repository root. The script is idempotent and waits for primary election. MongoDB transactions fail on a standalone server. The local replica-set member uses `localhost:27017`, matching the backend running on the host; do not use this topology for a backend running in a separate container without adapting replica-set discovery and networking. Set `SPRING_DATA_MONGODB_URI=mongodb://localhost:27017/sentinel?replicaSet=rs0` in the backend environment. These commands have not been executed in this development environment because Docker is unavailable. The issuer realm `sentinel` must still be configured in Keycloak. Do not use this development Compose stack on a public host. `mvn verify` requires a running MongoDB instance for Spring application-context tests.
 
 ## Roadmap
 
@@ -45,7 +45,7 @@ For local services, copy `.env.example` to `.env`, supply a unique `KEYCLOAK_ADM
 - Keycloak local Docker Compose with realm bootstrap and verified token issuance.
 - Access risk explanations, approvals and immutable audit trail.
 - Polished Angular dashboard and guided policy simulator.
-- Integration/security tests, CI green, documented local demo.
+- Integration/security tests (including real transaction rollback), CI green, documented local demo.
 
 ## Status and safeguards
 
