@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: sentinel
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Set to the configured Keycloak realm issuer, e.g.
+          # http://localhost:8081/realms/sentinel
+          issuer-uri: ${SENTINEL_OIDC_ISSUER_URI:http://localhost:8081/realms/sentinel}
+server:
+  error:
+    include-message: never
