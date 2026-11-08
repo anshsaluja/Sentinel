@@ -1,6 +1,10 @@
 spring:
   application:
     name: sentinel
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/sentinel}
+      auto-index-creation: true
   security:
     oauth2:
       resourceserver:
