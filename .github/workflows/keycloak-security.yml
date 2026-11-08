@@ -1,0 +1,25 @@
+name: Keycloak realm security checks
+on:
+  push:
+    paths:
+      - 'keycloak/sentinel-realm.json'
+      - 'scripts/test_keycloak_realm.py'
+      - '.github/workflows/keycloak-security.yml'
+  pull_request:
+    paths:
+      - 'keycloak/sentinel-realm.json'
+      - 'scripts/test_keycloak_realm.py'
+      - '.github/workflows/keycloak-security.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  realm-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate Keycloak realm and security invariants
+        run: python -m unittest discover -s scripts -p 'test_keycloak_realm.py' -v
