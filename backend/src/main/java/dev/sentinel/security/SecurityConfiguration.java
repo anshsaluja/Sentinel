@@ -22,7 +22,8 @@ public class SecurityConfiguration {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/policies/evaluate",
-                                "/api/v1/policies/simulate").authenticated()
+                                "/api/v1/policies/simulate",
+                                "/api/v1/risks/analyze", "/api/v1/risks/compare").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
                 .build();
