@@ -26,6 +26,7 @@ public class SecurityConfiguration {
                 .csrf(csrf -> csrf.disable()) // Stateless bearer-token API; no cookie sessions.
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/v1/approvals/pending", "/api/v1/approvals/*").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/policies/evaluate",
                                 "/api/v1/policies/simulate",
                                 "/api/v1/risks/analyze", "/api/v1/risks/compare").authenticated()
@@ -42,7 +43,7 @@ public class SecurityConfiguration {
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of("http://localhost:4200", "http://127.0.0.1:4200"));
-        config.setAllowedMethods(List.of("POST", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(false);
         config.setMaxAge(3600L);
