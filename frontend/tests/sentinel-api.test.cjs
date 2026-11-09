@@ -92,3 +92,22 @@ test('cancelPendingRequests aborts in-flight previews and clears request state',
     e.status === null && /cancelled/.test(e.message));
   api.cancelPendingRequests(); // repeated logout is safe
 });
+
+test('logout during response parsing rejects the stale payload', async () => {
+  let beginParsing;
+  const parsing = new Promise(resolve => { beginParsing = resolve; });
+  let finishParsing;
+  const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+    ok: true,
+    json: async () => {
+      beginParsing();
+      return new Promise(resolve => { finishParsing = resolve; });
+    },
+  }));
+  const request = api.evaluate({});
+  await parsing;
+  api.cancelPendingRequests();
+  finishParsing({ sensitive: 'previous session' });
+  await assert.rejects(request, e => e instanceof SentinelApiError &&
+    e.status === null && /cancelled/.test(e.message));
+});
