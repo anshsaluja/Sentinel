@@ -4,6 +4,7 @@ import dev.sentinel.audit.AuditDocument;
 import dev.sentinel.audit.AuditHistoryService;
 import dev.sentinel.audit.AuditRepository;
 import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -56,7 +57,8 @@ public class TransactionalApprovalService {
             throw new SecurityException("Cross-tenant approval record");
 
         var prepared = coordinator.prepare(current.toDomain(), actor, action,
-                expectedVersion, clock.instant(), history.verifiedHistory(actor.tenantId()));
+                expectedVersion, clock.instant().truncatedTo(ChronoUnit.MILLIS),
+                history.verifiedHistory(actor.tenantId()));
         ApprovalDocument updated = new ApprovalDocument(prepared.updatedRequest());
         // Spring Data uses the version read from Mongo to enforce compare-and-swap.
         updated.version = current.version;
