@@ -1,1 +1,9 @@
 :root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#e6ecf5;background:#0b1220}*{box-sizing:border-box}body{margin:0}button{background:#5c7cfa;border:0;border-radius:8px;padding:12px 18px;color:white;font-weight:650;cursor:pointer}button:disabled{opacity:.5}main{max-width:1050px;margin:60px auto;padding:0 24px}.eyebrow{color:#91a6ca;letter-spacing:.14em;text-transform:uppercase;font-size:12px}h1{font-size:clamp(32px,5vw,54px);margin:10px 0}p{color:#a9b8d1;line-height:1.7}.card{border:1px solid #263650;background:#131f33;border-radius:16px;padding:28px;margin-top:30px}.badge{display:inline-block;padding:6px 10px;border-radius:30px;background:#233b4a;color:#92e0cb}code{overflow-wrap:anywhere;color:#c1d1f4}
+
+section[aria-labelledby="approvals-heading"]{margin-top:28px;padding-top:20px;border-top:1px solid #263650}
+.approval-item{margin:14px 0;padding:18px;border:1px solid #344765;border-radius:12px;background:#17253a}
+.approval-item h4{margin:0 0 8px;color:#e6ecf5}
+.approval-item p{overflow-wrap:anywhere;margin:8px 0}
+.approval-item button{margin:8px 10px 0 0}
+.approval-item button:last-child{background:#435575}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #92e0cb;outline-offset:3px}
