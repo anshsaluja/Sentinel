@@ -47,7 +47,9 @@ def probe(base_url: str, token: str | None, timeout: float = 5.0) -> list[str]:
                     if len(payload) > 65536:
                         raise RuntimeError("Authenticated approval response exceeds 64 KiB")
                     try:
-                        json.loads(payload)
+                        decoded = json.loads(payload)
+                        if not isinstance(decoded, list):
+                            raise RuntimeError("Authenticated approval queue must return a JSON array")
                     except (ValueError, UnicodeDecodeError):
                         raise RuntimeError("Authenticated approval queue returned invalid JSON") from None
                 return response.status
