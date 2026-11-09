@@ -27,6 +27,7 @@ public class SecurityConfiguration {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/v1/approvals/pending", "/api/v1/approvals/*").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/approvals/*/decision").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/policies/evaluate",
                                 "/api/v1/policies/simulate",
                                 "/api/v1/risks/analyze", "/api/v1/risks/compare").authenticated()
