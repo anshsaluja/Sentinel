@@ -13,7 +13,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 class ApprovalApiControllerTest {
     private final ApprovalPersistenceService service = mock(ApprovalPersistenceService.class);
-    private final ApprovalApiController controller = new ApprovalApiController(service);
+    private final TransactionalApprovalService transitions = mock(TransactionalApprovalService.class);
+    private final ApprovalApiController controller = new ApprovalApiController(service, transitions);
 
     private static Jwt token(String tenant) {
         return new Jwt("test-token", Instant.parse("2026-01-01T00:00:00Z"),
@@ -69,4 +70,46 @@ class ApprovalApiControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         verifyNoInteractions(service);
     }
+    @Test
+    void reviewerDecisionUsesTokenIdentityAndExpectedVersion() {
+        ApprovalApiController.Decision decision = new ApprovalApiController.Decision(
+                ApprovalWorkflow.Action.APPROVE, 3L);
+        controller.decide(token("team-a"), "req-1", decision);
+        verify(transitions).transition(eq("req-1"),
+                eq(new ApprovalWorkflow.Actor("team-a", "reviewer", true)),
+                eq(ApprovalWorkflow.Action.APPROVE), eq(3L));
+    }
+
+    @Test
+    void cancellationCannotBeSubmittedThroughReviewerDecisionEndpoint() {
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(token("team-a"), "req-1",
+                        new ApprovalApiController.Decision(ApprovalWorkflow.Action.CANCEL, 0L)));
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void ordinaryUserCannotSubmitApprovalDecision() {
+        Jwt ordinary = new Jwt("test-token", Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2027-01-01T00:00:00Z"), Map.of("alg", "none"),
+                Map.of("sub", "ordinary", "tenant_id", "team-a"));
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(ordinary, "req-1",
+                        new ApprovalApiController.Decision(ApprovalWorkflow.Action.APPROVE, 0L)));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void staleVersionProducesSanitizedConflict() {
+        when(transitions.transition(anyString(), any(), any(), anyLong()))
+                .thenThrow(new IllegalStateException("internal details"));
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(token("team-a"), "req-1",
+                        new ApprovalApiController.Decision(ApprovalWorkflow.Action.REJECT, 2L)));
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals("Approval cannot be updated", error.getReason());
+    }
+
 }
