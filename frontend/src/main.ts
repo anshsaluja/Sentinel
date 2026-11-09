@@ -88,6 +88,8 @@ class AppComponent implements OnInit {
   readonly riskLoading = signal(false);
   readonly riskError = signal('');
   readonly riskResult = signal('');
+  // Invalidate outstanding preview responses when the session changes.
+  private sessionEpoch = 0;
   private readonly api = new SentinelApiClient(() => this.oauth.getAccessToken() || null);
 
   readonly resourceId = signal('ledger');
@@ -132,16 +134,18 @@ class AppComponent implements OnInit {
   }
 
   private async runPreview(operation: () => Promise<unknown>): Promise<void> {
+    if (!this.authenticated() || this.previewLoading()) return;
+    const epoch = this.sessionEpoch;
     this.previewLoading.set(true);
     this.previewError.set('');
     this.previewResult.set('');
     try {
       const response = await operation();
-      this.previewResult.set(JSON.stringify(response, null, 2) ?? 'Empty response');
+      if (epoch === this.sessionEpoch) this.previewResult.set(JSON.stringify(response, null, 2) ?? 'Empty response');
     } catch (error) {
-      this.previewError.set(error instanceof Error ? error.message : 'Preview failed');
+      if (epoch === this.sessionEpoch) this.previewError.set(error instanceof Error ? error.message : 'Preview failed');
     } finally {
-      this.previewLoading.set(false);
+      if (epoch === this.sessionEpoch) this.previewLoading.set(false);
     }
   }
 
@@ -165,17 +169,18 @@ class AppComponent implements OnInit {
   }
 
   private async runRisk(operation: () => Promise<unknown>): Promise<void> {
-    if (this.riskLoading()) return;
+    if (!this.authenticated() || this.riskLoading()) return;
+    const epoch = this.sessionEpoch;
     this.riskLoading.set(true);
     this.riskError.set('');
     this.riskResult.set('');
     try {
       const response = await operation();
-      this.riskResult.set(JSON.stringify(response, null, 2) ?? 'Empty response');
+      if (epoch === this.sessionEpoch) this.riskResult.set(JSON.stringify(response, null, 2) ?? 'Empty response');
     } catch (error) {
-      this.riskError.set(error instanceof Error ? error.message : 'Risk preview failed');
+      if (epoch === this.sessionEpoch) this.riskError.set(error instanceof Error ? error.message : 'Risk preview failed');
     } finally {
-      this.riskLoading.set(false);
+      if (epoch === this.sessionEpoch) this.riskLoading.set(false);
     }
   }
 
@@ -204,7 +209,17 @@ class AppComponent implements OnInit {
   }
 
   login(): void { this.oauth.initCodeFlow(); }
-  logout(): void { this.oauth.logOut(); this.authenticated.set(false); this.previewResult.set(''); this.previewError.set(''); this.riskResult.set(''); this.riskError.set(''); } 
+  logout(): void {
+    this.sessionEpoch++;
+    this.authenticated.set(false);
+    this.previewLoading.set(false);
+    this.riskLoading.set(false);
+    this.previewResult.set('');
+    this.previewError.set('');
+    this.riskResult.set('');
+    this.riskError.set('');
+    this.oauth.logOut();
+  } 
 }
 
 bootstrapApplication(AppComponent, {
