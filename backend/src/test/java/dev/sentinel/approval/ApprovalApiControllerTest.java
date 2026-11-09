@@ -112,4 +112,57 @@ class ApprovalApiControllerTest {
         assertEquals("Approval cannot be updated", error.getReason());
     }
 
+
+    @Test
+    void adminCanReviewUsingTheirOwnIdentity() {
+        Jwt admin = new Jwt("test-token", Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2027-01-01T00:00:00Z"), Map.of("alg", "none"),
+                Map.of("sub", "admin-42", "tenant_id", "team-a",
+                        "realm_access", Map.of("roles", List.of("sentinel-admin"))));
+        controller.decide(admin, "req-1",
+                new ApprovalApiController.Decision(ApprovalWorkflow.Action.REJECT, 1L));
+        verify(transitions).transition("req-1",
+                new ApprovalWorkflow.Actor("team-a", "admin-42", true),
+                ApprovalWorkflow.Action.REJECT, 1L);
+    }
+
+    @Test
+    void missingReviewerSubjectIsRejectedBeforeTransition() {
+        Jwt noSubject = new Jwt("test-token", Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2027-01-01T00:00:00Z"), Map.of("alg", "none"),
+                Map.of("tenant_id", "team-a",
+                        "realm_access", Map.of("roles", List.of("sentinel-reviewer"))));
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(noSubject, "req-1",
+                        new ApprovalApiController.Decision(ApprovalWorkflow.Action.APPROVE, 0L)));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void negativeVersionIsRejectedBeforeTransition() {
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(token("team-a"), "req-1",
+                        new ApprovalApiController.Decision(ApprovalWorkflow.Action.APPROVE, -1L)));
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void missingDecisionIsRejectedBeforeTransition() {
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(token("team-a"), "req-1", null));
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void decisionIdentifierIsValidatedBeforeTransition() {
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.decide(token("team-a"), "../other",
+                        new ApprovalApiController.Decision(ApprovalWorkflow.Action.APPROVE, 0L)));
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verifyNoInteractions(transitions);
+    }
+
 }
