@@ -1,4 +1,4 @@
-import { SentinelApiClient } from './sentinel-api';
+import { SentinelApiClient, type ApprovalRequest } from './sentinel-api';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
@@ -65,6 +65,26 @@ const authConfig: AuthConfig = {
               <pre aria-live="polite">{{ riskResult() }}</pre>
             }
           </section>
+          <section aria-labelledby="approvals-heading">
+            <h3 id="approvals-heading">Pending access approvals</h3>
+            <p>Review tenant-scoped requests. Decisions are audited by the backend and cannot be undone.</p>
+            <button [disabled]="approvalsLoading() || decisionId() !== ''" (click)="loadApprovals()">Refresh approvals</button>
+            @if (approvalsLoading()) { <p role="status">Loading approvals…</p> }
+            @if (approvalsError()) { <p role="alert">{{ approvalsError() }}</p> }
+            @if (approvalsNotice()) { <p role="status">{{ approvalsNotice() }}</p> }
+            @if (!approvalsLoading() && approvals().length === 0 && !approvalsError()) {
+              <p>No approvals loaded. Refresh to check the queue.</p>
+            }
+            @for (approval of approvals(); track approval.id) {
+              <article class="approval-item">
+                <h4>{{ approval.resourceId }}</h4>
+                <p>Requested by {{ approval.requesterId }} · Version {{ approval.version }}</p>
+                <p>{{ approval.justification }}</p>
+                <button [disabled]="decisionId() !== ''" (click)="decide(approval, 'APPROVE')">Approve</button>
+                <button [disabled]="decisionId() !== ''" (click)="decide(approval, 'REJECT')">Reject</button>
+              </article>
+            }
+          </section>
           <button (click)="logout()">Sign out</button>
         } @else {
           <h2>Secure workspace</h2>
@@ -88,6 +108,11 @@ class AppComponent implements OnInit {
   readonly riskLoading = signal(false);
   readonly riskError = signal('');
   readonly riskResult = signal('');
+  readonly approvals = signal<ApprovalRequest[]>([]);
+  readonly approvalsLoading = signal(false);
+  readonly approvalsError = signal('');
+  readonly approvalsNotice = signal('');
+  readonly decisionId = signal('');
   // Invalidate outstanding preview responses when the session changes.
   private sessionEpoch = 0;
   private readonly api = new SentinelApiClient(() => this.oauth.getAccessToken() || null);
@@ -184,6 +209,46 @@ class AppComponent implements OnInit {
     }
   }
 
+  async loadApprovals(): Promise<void> {
+    if (!this.authenticated() || this.approvalsLoading() || this.decisionId()) return;
+    const epoch = this.sessionEpoch;
+    this.approvalsLoading.set(true);
+    this.approvalsError.set('');
+    this.approvalsNotice.set('');
+    try {
+      const queue = await this.api.pendingApprovals();
+      if (epoch === this.sessionEpoch) this.approvals.set(queue);
+    } catch (error) {
+      if (epoch === this.sessionEpoch) this.approvalsError.set(
+        error instanceof Error ? error.message : 'Unable to load approvals');
+    } finally {
+      if (epoch === this.sessionEpoch) this.approvalsLoading.set(false);
+    }
+  }
+
+  async decide(approval: ApprovalRequest, action: 'APPROVE' | 'REJECT'): Promise<void> {
+    if (!this.authenticated() || this.decisionId() || approval.status !== 'PENDING') return;
+    if (!window.confirm(`${action === 'APPROVE' ? 'Approve' : 'Reject'} access request ${approval.id}?`)) return;
+    const epoch = this.sessionEpoch;
+    this.decisionId.set(approval.id);
+    this.approvalsError.set('');
+    this.approvalsNotice.set('');
+    try {
+      await this.api.decideApproval(approval.id, action, approval.version);
+      if (epoch === this.sessionEpoch) {
+        this.approvals.set(this.approvals().filter(item => item.id !== approval.id));
+        this.approvalsNotice.set(`Request ${approval.id} ${action === 'APPROVE' ? 'approved' : 'rejected'}.`);
+      }
+    } catch (error) {
+      if (epoch === this.sessionEpoch) {
+        this.approvalsError.set(error instanceof Error ? error.message : 'Decision failed');
+        // On conflict, require an explicit refresh rather than retrying a stale version.
+      }
+    } finally {
+      if (epoch === this.sessionEpoch) this.decisionId.set('');
+    }
+  }
+
   ngOnInit(): void { void this.initialize(); }
 
   async initialize(): Promise<void> {
@@ -193,6 +258,11 @@ class AppComponent implements OnInit {
     this.authenticated.set(false);
     this.previewLoading.set(false);
     this.riskLoading.set(false);
+    this.approvals.set([]);
+    this.approvalsLoading.set(false);
+    this.approvalsError.set('');
+    this.approvalsNotice.set('');
+    this.decisionId.set('');
     this.previewResult.set('');
     this.riskResult.set('');
     this.previewError.set('');
@@ -231,6 +301,11 @@ class AppComponent implements OnInit {
     this.authenticated.set(false);
     this.previewLoading.set(false);
     this.riskLoading.set(false);
+    this.approvals.set([]);
+    this.approvalsLoading.set(false);
+    this.approvalsError.set('');
+    this.approvalsNotice.set('');
+    this.decisionId.set('');
     this.previewResult.set('');
     this.previewError.set('');
     this.riskResult.set('');
