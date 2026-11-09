@@ -155,3 +155,60 @@ test('response is discarded if the token disappears while parsing', async () => 
   await assert.rejects(request, error =>
     error instanceof SentinelApiError && error.status === 401);
 });
+
+const approval = {
+  id: 'req-1', tenantId: 'local-demo', requesterId: 'alice', approverId: null,
+  resourceId: 'ledger', justification: 'Temporary access', status: 'PENDING',
+  version: 2, updatedAt: '2026-11-09T00:00:00Z',
+};
+
+test('approval queue sends an authenticated GET without a body', async () => {
+  let captured;
+  const api = new SentinelApiClient(() => 'reviewer-token', undefined, async (url, options) => {
+    captured = { url: String(url), options };
+    return { ok: true, json: async () => [approval] };
+  });
+  assert.deepEqual(await api.pendingApprovals(), [approval]);
+  assert.equal(captured.url, 'http://localhost:8080/api/v1/approvals/pending');
+  assert.equal(captured.options.method, 'GET');
+  assert.equal(captured.options.body, undefined);
+  assert.equal(captured.options.headers.Authorization, 'Bearer reviewer-token');
+});
+
+test('approval decisions send action and optimistic version', async () => {
+  let captured;
+  const api = new SentinelApiClient(() => 'reviewer-token', undefined, async (url, options) => {
+    captured = { url: String(url), options };
+    return { ok: true, json: async () => ({ ...approval, status: 'APPROVED', version: 3 }) };
+  });
+  const result = await api.decideApproval('req-1', 'APPROVE', 2);
+  assert.equal(result.status, 'APPROVED');
+  assert.equal(captured.url, 'http://localhost:8080/api/v1/approvals/req-1/decision');
+  assert.equal(captured.options.method, 'POST');
+  assert.deepEqual(JSON.parse(captured.options.body), { action: 'APPROVE', expectedVersion: 2 });
+});
+
+test('invalid approval identifiers and versions never reach the network', async () => {
+  let calls = 0;
+  const api = new SentinelApiClient(() => 'token', undefined, async () => { calls++; });
+  await assert.rejects(api.decideApproval('../other', 'REJECT', 0), SentinelApiError);
+  await assert.rejects(api.decideApproval('req-1', 'REJECT', -1), SentinelApiError);
+  await assert.rejects(api.decideApproval('req-1', 'APPROVE', 1.5), SentinelApiError);
+  assert.equal(calls, 0);
+});
+
+test('malformed approval queue responses are rejected', async () => {
+  const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+    ok: true, json: async () => [{ id: 'req-1', status: 'PENDING' }],
+  }));
+  await assert.rejects(api.pendingApprovals(), SentinelApiError);
+});
+
+test('approval conflict exposes only sanitized HTTP status', async () => {
+  const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+    ok: false, status: 409, text: async () => 'internal transaction details',
+  }));
+  await assert.rejects(api.decideApproval('req-1', 'REJECT', 2), error =>
+    error instanceof SentinelApiError && error.status === 409 &&
+    !error.message.includes('transaction'));
+});
