@@ -121,6 +121,11 @@ export class SentinelApiClient {
       if (controller.signal.aborted) {
         throw new SentinelApiError('Sentinel API request was cancelled or timed out', null);
       }
+      // A token can rotate or be cleared without a component logout callback.
+      // Never return a response fetched under a different authentication session.
+      if (this.accessToken() !== token) {
+        throw new SentinelApiError('Sentinel authentication changed during the request', 401);
+      }
       return payload;
     } catch (error) {
       if (error instanceof SentinelApiError) throw error;
