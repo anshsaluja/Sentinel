@@ -18,7 +18,8 @@ class ApprovalApiControllerTest {
     private static Jwt token(String tenant) {
         return new Jwt("test-token", Instant.parse("2026-01-01T00:00:00Z"),
                 Instant.parse("2027-01-01T00:00:00Z"),
-                Map.of("alg", "none"), Map.of("sub", "reviewer", "tenant_id", tenant));
+                Map.of("alg", "none"), Map.of("sub", "reviewer", "tenant_id", tenant,
+                        "realm_access", Map.of("roles", List.of("sentinel-reviewer"))));
     }
 
     @Test
@@ -36,6 +37,17 @@ class ApprovalApiControllerTest {
                 Map.of("alg", "none"), Map.of("sub", "reviewer"));
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> controller.pending(missing));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void ordinaryAuthenticatedUserCannotReadQueue() {
+        Jwt ordinary = new Jwt("test-token", Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2027-01-01T00:00:00Z"), Map.of("alg", "none"),
+                Map.of("sub", "ordinary", "tenant_id", "team-a"));
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> controller.pending(ordinary));
         assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
         verifyNoInteractions(service);
     }
