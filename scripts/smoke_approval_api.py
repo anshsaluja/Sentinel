@@ -18,7 +18,7 @@ def probe(base_url: str, token: str | None, timeout: float = 5.0) -> list[str]:
         raise ValueError("Plain HTTP is allowed only for loopback hosts")
     if parsed.path not in ("", "/"):
         raise ValueError("Base URL must not include a path")
-    if token and ("\\r" in token or "\\n" in token):
+    if token and ("\r" in token or "\n" in token):
         raise ValueError("Access token contains invalid line breaks")
     if timeout <= 0:
         raise ValueError("Timeout must be positive")
