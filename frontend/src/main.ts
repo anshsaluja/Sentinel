@@ -187,12 +187,23 @@ class AppComponent implements OnInit {
   ngOnInit(): void { void this.initialize(); }
 
   async initialize(): Promise<void> {
+    // Reinitialization must not allow responses from a previous session to render.
+    const epoch = ++this.sessionEpoch;
+    this.api.cancelPendingRequests();
+    this.authenticated.set(false);
+    this.previewLoading.set(false);
+    this.riskLoading.set(false);
+    this.previewResult.set('');
+    this.riskResult.set('');
+    this.previewError.set('');
+    this.riskError.set('');
     this.loading.set(true);
     this.error.set('');
     try {
       this.oauth.configure(authConfig);
       this.oauth.setupAutomaticSilentRefresh();
       await this.oauth.loadDiscoveryDocumentAndTryLogin();
+      if (epoch !== this.sessionEpoch) return;
       this.authenticated.set(this.oauth.hasValidAccessToken());
       if (this.authenticated()) {
         const claims = this.oauth.getIdentityClaims() as Record<string, unknown> | null;
@@ -202,15 +213,21 @@ class AppComponent implements OnInit {
         this.tenantId.set('Resolved by the backend from your access token');
       }
     } catch {
+      if (epoch !== this.sessionEpoch) return;
       this.error.set('Cannot reach Keycloak. Start the local Compose stack and confirm the realm is imported.');
     } finally {
-      this.loading.set(false);
+      if (epoch === this.sessionEpoch) this.loading.set(false);
     }
   }
 
   login(): void { this.oauth.initCodeFlow(); }
   logout(): void {
     this.sessionEpoch++;
+    this.api.cancelPendingRequests();
+    this.loading.set(false);
+    this.error.set('');
+    this.displayName.set('');
+    this.tenantId.set('');
     this.authenticated.set(false);
     this.previewLoading.set(false);
     this.riskLoading.set(false);
