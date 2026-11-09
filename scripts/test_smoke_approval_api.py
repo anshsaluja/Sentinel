@@ -8,7 +8,13 @@ from smoke_approval_api import probe
 
 class ApprovalHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != "/api/v1/approvals/pending":
+        if self.path == "/api/v1/approvals/pending" and self.headers.get("X-Redirect-Test") == "1":
+            self.send_response(302)
+            self.send_header("Location", "http://example.org/")
+        elif self.path == "/api/v1/approvals/redirect":
+            self.send_response(302)
+            self.send_header("Location", "http://example.org/")
+        elif self.path != "/api/v1/approvals/pending":
             self.send_response(404)
         elif self.headers.get("Authorization") == "Bearer reviewer-test-token":
             self.send_response(200)
@@ -43,6 +49,31 @@ class ApprovalSmokeTests(unittest.TestCase):
     def test_invalid_reviewer_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "expected 200"):
             probe(self.url, "not-a-reviewer")
+
+    def test_rejects_base_url_paths(self):
+        with self.assertRaisesRegex(ValueError, "path"):
+            probe(self.url + "/unexpected", None)
+
+    def test_rejects_token_line_breaks(self):
+        with self.assertRaisesRegex(ValueError, "line breaks"):
+            probe(self.url, "token\\nInjected: value")
+
+    def test_rejects_nonpositive_timeout(self):
+        with self.assertRaisesRegex(ValueError, "Timeout"):
+            probe(self.url, None, timeout=0)
+
+    def test_redirect_does_not_follow_to_external_host(self):
+        from unittest.mock import patch
+        original = ApprovalHandler.do_GET
+
+        def redirect(_handler):
+            _handler.send_response(302)
+            _handler.send_header("Location", "http://example.org/")
+            _handler.end_headers()
+
+        with patch.object(ApprovalHandler, "do_GET", redirect):
+            with self.assertRaisesRegex(RuntimeError, "redirected"):
+                probe(self.url, "reviewer-test-token")
 
     def test_rejects_remote_plain_http(self):
         with self.assertRaisesRegex(ValueError, "loopback"):
