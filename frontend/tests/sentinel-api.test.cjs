@@ -111,3 +111,47 @@ test('logout during response parsing rejects the stale payload', async () => {
   await assert.rejects(request, e => e instanceof SentinelApiError &&
     e.status === null && /cancelled/.test(e.message));
 });
+
+test('response from a previous authentication token is discarded', async () => {
+  let currentToken = 'session-one';
+  let finishParsing;
+  let parsingStarted;
+  const started = new Promise(resolve => { parsingStarted = resolve; });
+  const api = new SentinelApiClient(() => currentToken, undefined, async (_url, options) => {
+    assert.equal(options.headers.Authorization, 'Bearer session-one');
+    return {
+      ok: true,
+      json: async () => {
+        parsingStarted();
+        return new Promise(resolve => { finishParsing = resolve; });
+      },
+    };
+  });
+  const request = api.evaluate({});
+  await started;
+  currentToken = 'session-two';
+  finishParsing({ allowed: true });
+  await assert.rejects(request, error =>
+    error instanceof SentinelApiError && error.status === 401 &&
+    /authentication changed/.test(error.message));
+});
+
+test('response is discarded if the token disappears while parsing', async () => {
+  let currentToken = 'session-one';
+  let finishParsing;
+  let parsingStarted;
+  const started = new Promise(resolve => { parsingStarted = resolve; });
+  const api = new SentinelApiClient(() => currentToken, undefined, async () => ({
+    ok: true,
+    json: async () => {
+      parsingStarted();
+      return new Promise(resolve => { finishParsing = resolve; });
+    },
+  }));
+  const request = api.analyzeRisks({});
+  await started;
+  currentToken = null;
+  finishParsing({ findings: [] });
+  await assert.rejects(request, error =>
+    error instanceof SentinelApiError && error.status === 401);
+});
