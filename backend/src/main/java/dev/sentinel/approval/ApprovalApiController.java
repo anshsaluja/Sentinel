@@ -1,6 +1,7 @@
 package dev.sentinel.approval;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,13 +27,16 @@ public class ApprovalApiController {
 
     @GetMapping("/pending")
     public List<ApprovalWorkflow.Request> pending(@AuthenticationPrincipal Jwt jwt) {
-        return approvals.pending(tenant(jwt));
+        String tenantId = tenant(jwt);
+        requireReviewer(jwt);
+        return approvals.pending(tenantId);
     }
 
     @GetMapping("/{requestId}")
     public ApprovalWorkflow.Request find(@AuthenticationPrincipal Jwt jwt,
                                          @PathVariable String requestId) {
         String tenantId = tenant(jwt);
+        requireReviewer(jwt);
         if (requestId == null || !requestId.matches("[a-zA-Z0-9_.:-]{1,120}")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid approval identifier");
         }
@@ -40,6 +44,15 @@ public class ApprovalApiController {
             return approvals.find(tenantId, requestId);
         } catch (IllegalArgumentException notFound) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval not found");
+        }
+    }
+
+    private static void requireReviewer(Jwt jwt) {
+        Object access = jwt.getClaim("realm_access");
+        Object roles = access instanceof Map<?, ?> realm ? realm.get("roles") : null;
+        if (!(roles instanceof List<?> roleList) ||
+                (!roleList.contains("sentinel-reviewer") && !roleList.contains("sentinel-admin"))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Reviewer role required");
         }
     }
 
