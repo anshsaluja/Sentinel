@@ -76,6 +76,19 @@ class ApprovalSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
                 probe(self.url, "reviewer-test-token")
 
+    def test_rejects_json_object_instead_of_queue_array(self):
+        from unittest.mock import patch
+
+        def object_response(handler):
+            handler.send_response(200)
+            handler.send_header("Content-Type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(b'{"pending": []}')
+
+        with patch.object(ApprovalHandler, "do_GET", object_response):
+            with self.assertRaisesRegex(RuntimeError, "JSON array"):
+                probe(self.url, "reviewer-test-token")
+
     def test_rejects_oversized_json_response(self):
         from unittest.mock import patch
 
