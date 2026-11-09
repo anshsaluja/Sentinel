@@ -23,6 +23,8 @@ class ApprovalHandler(http.server.BaseHTTPRequestHandler):
         if self.headers.get("Authorization") == "Bearer reviewer-test-token":
             self.send_header("Content-Type", "application/json")
         self.end_headers()
+        if self.path == "/api/v1/approvals/pending" and self.headers.get("Authorization") == "Bearer reviewer-test-token":
+            self.wfile.write(b"[]")
 
     def log_message(self, *_args):
         pass
@@ -59,6 +61,32 @@ class ApprovalSmokeTests(unittest.TestCase):
 
         with patch.object(ApprovalHandler, "do_GET", html_response):
             with self.assertRaisesRegex(RuntimeError, "did not return JSON"):
+                probe(self.url, "reviewer-test-token")
+
+    def test_rejects_invalid_json_with_correct_media_type(self):
+        from unittest.mock import patch
+
+        def invalid_json(handler):
+            handler.send_response(200)
+            handler.send_header("Content-Type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(b"<not-json>")
+
+        with patch.object(ApprovalHandler, "do_GET", invalid_json):
+            with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
+                probe(self.url, "reviewer-test-token")
+
+    def test_rejects_oversized_json_response(self):
+        from unittest.mock import patch
+
+        def oversized(handler):
+            handler.send_response(200)
+            handler.send_header("Content-Type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(b" " * 65537)
+
+        with patch.object(ApprovalHandler, "do_GET", oversized):
+            with self.assertRaisesRegex(RuntimeError, "exceeds 64 KiB"):
                 probe(self.url, "reviewer-test-token")
 
     def test_invalid_reviewer_is_rejected(self):
