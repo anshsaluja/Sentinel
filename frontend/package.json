@@ -5,7 +5,8 @@
   "scripts": {
     "start": "ng serve --host 127.0.0.1",
     "build": "ng build",
-    "test": "ng test --watch=false"
+    "test": "node --test tests/*.test.cjs",
+    "test:angular": "ng test --watch=false"
   },
   "dependencies": {
     "@angular/animations": "^19.2.0",
