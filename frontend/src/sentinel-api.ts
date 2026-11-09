@@ -116,7 +116,12 @@ export class SentinelApiClient {
         // Do not surface raw backend error bodies: they can contain sensitive details.
         throw new SentinelApiError(`Sentinel API returned HTTP ${response.status}`, response.status);
       }
-      return response.json() as Promise<unknown>;
+      // Parsing can outlive fetch: a logout during response.json() must not return stale data.
+      const payload: unknown = await response.json();
+      if (controller.signal.aborted) {
+        throw new SentinelApiError('Sentinel API request was cancelled or timed out', null);
+      }
+      return payload;
     } catch (error) {
       if (error instanceof SentinelApiError) throw error;
       if (controller.signal.aborted) {
