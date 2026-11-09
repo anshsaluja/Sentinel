@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.sentinel.security.SecurityConfiguration;
@@ -44,6 +45,30 @@ class ApprovalDecisionHttpSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void anonymousCannotReadApprovalQueue() throws Exception {
+        mvc.perform(get("/api/v1/approvals/pending"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(approvals);
+    }
+
+    @Test
+    void ordinaryUserCannotReadApprovalQueue() throws Exception {
+        mvc.perform(get("/api/v1/approvals/pending").with(jwt().jwt(token -> token
+                        .subject("ordinary").claim("tenant_id", "team-a"))))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(approvals);
+    }
+
+    @Test
+    void reviewerCanReadOwnTenantQueue() throws Exception {
+        mvc.perform(get("/api/v1/approvals/pending").with(jwt().jwt(token -> token
+                        .subject("reviewer").claim("tenant_id", "team-a")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                .andExpect(status().isOk());
+        verify(approvals).pending("team-a");
     }
 
     @Test
