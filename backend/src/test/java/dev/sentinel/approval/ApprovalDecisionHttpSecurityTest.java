@@ -72,6 +72,43 @@ class ApprovalDecisionHttpSecurityTest {
     }
 
     @Test
+    void anonymousCannotReadApprovalDetails() throws Exception {
+        mvc.perform(get("/api/v1/approvals/req-1"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(approvals);
+    }
+
+    @Test
+    void ordinaryUserCannotReadApprovalDetails() throws Exception {
+        mvc.perform(get("/api/v1/approvals/req-1").with(jwt().jwt(token -> token
+                        .subject("ordinary").claim("tenant_id", "team-a"))))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(approvals);
+    }
+
+    @Test
+    void reviewerDetailLookupIsScopedToTokenTenant() throws Exception {
+        mvc.perform(get("/api/v1/approvals/req-1").with(jwt().jwt(token -> token
+                        .subject("reviewer").claim("tenant_id", "team-a")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                .andExpect(status().isOk());
+        verify(approvals).find("team-a", "req-1");
+    }
+
+    @Test
+    void angularPreflightCanReadApprovalQueue() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options(
+                        "/api/v1/approvals/pending")
+                        .header("Origin", "http://localhost:4200")
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Access-Control-Allow-Origin", "http://localhost:4200"));
+        verifyNoInteractions(approvals);
+    }
+
+    @Test
     void reviewerDecisionReachesTransactionalServiceThroughFilterChain() throws Exception {
         mvc.perform(post(PATH).with(jwt().jwt(token -> token
                         .subject("reviewer").claim("tenant_id", "team-a")
