@@ -54,6 +54,14 @@ export type AccessTokenProvider = () => string | null;
  * response contracts are verified against the backend; never invent fields.
  */
 export class SentinelApiClient {
+  private readonly pendingRequests = new Set<AbortController>();
+
+  /** Cancel outstanding previews when the authenticated session ends. */
+  cancelPendingRequests(): void {
+    for (const controller of this.pendingRequests) controller.abort();
+    this.pendingRequests.clear();
+  }
+
   constructor(
     private readonly accessToken: AccessTokenProvider,
     private readonly baseUrl = 'http://localhost:8080',
@@ -90,6 +98,7 @@ export class SentinelApiClient {
       throw new SentinelApiError('Sign in before requesting policy previews', 401);
     }
     const controller = new AbortController();
+    this.pendingRequests.add(controller);
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
       const response = await this.fetcher(new URL(path, this.baseUrl), {
@@ -111,11 +120,12 @@ export class SentinelApiClient {
     } catch (error) {
       if (error instanceof SentinelApiError) throw error;
       if (controller.signal.aborted) {
-        throw new SentinelApiError('Sentinel API request timed out', null);
+        throw new SentinelApiError('Sentinel API request was cancelled or timed out', null);
       }
       throw new SentinelApiError('Unable to reach the local Sentinel API', null);
     } finally {
       clearTimeout(timer);
+      this.pendingRequests.delete(controller);
     }
   }
 }
