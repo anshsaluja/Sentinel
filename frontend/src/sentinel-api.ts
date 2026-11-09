@@ -47,6 +47,18 @@ export interface SimulationPreview {
   after: PolicyRule[];
 }
 
+export interface ApprovalRequest {
+  id: string;
+  tenantId: string;
+  requesterId: string;
+  approverId: string | null;
+  resourceId: string;
+  justification: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  version: number;
+  updatedAt: string;
+}
+
 export type AccessTokenProvider = () => string | null;
 
 /**
@@ -92,7 +104,34 @@ export class SentinelApiClient {
     return this.post('/api/v1/risks/compare', request);
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
+  async pendingApprovals(): Promise<ApprovalRequest[]> {
+    const payload = await this.request('/api/v1/approvals/pending', 'GET');
+    if (!Array.isArray(payload) || !payload.every(isApprovalRequest)) {
+      throw new SentinelApiError('Invalid approval queue response', null);
+    }
+    return payload;
+  }
+
+  async decideApproval(id: string, action: 'APPROVE' | 'REJECT', expectedVersion: number): Promise<ApprovalRequest> {
+    if (!/^[a-zA-Z0-9_.:-]{1,120}$/.test(id) ||
+        !Number.isSafeInteger(expectedVersion) || expectedVersion < 0) {
+      throw new SentinelApiError('Invalid approval request', null);
+    }
+    const payload = await this.request(
+      `/api/v1/approvals/${encodeURIComponent(id)}/decision`,
+      'POST', { action, expectedVersion },
+    );
+    if (!isApprovalRequest(payload)) {
+      throw new SentinelApiError('Invalid approval decision response', null);
+    }
+    return payload;
+  }
+
+  private post(path: string, body: unknown): Promise<unknown> {
+    return this.request(path, 'POST', body);
+  }
+
+  private async request(path: string, method: 'GET' | 'POST', body?: unknown): Promise<unknown> {
     const token = this.accessToken();
     if (!token) {
       throw new SentinelApiError('Sign in before requesting policy previews', 401);
@@ -102,13 +141,13 @@ export class SentinelApiClient {
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
       const response = await this.fetcher(new URL(path, this.baseUrl), {
-        method: 'POST',
+        method,
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
           Accept: 'application/json',
         },
-        body: JSON.stringify(body),
+        ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
         cache: 'no-store',
       });
@@ -138,4 +177,19 @@ export class SentinelApiClient {
       this.pendingRequests.delete(controller);
     }
   }
+}
+
+function isApprovalRequest(value: unknown): value is ApprovalRequest {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item['id'] === 'string' &&
+    /^[a-zA-Z0-9_.:-]{1,120}$/.test(item['id']) &&
+    typeof item['tenantId'] === 'string' &&
+    typeof item['requesterId'] === 'string' &&
+    typeof item['resourceId'] === 'string' &&
+    typeof item['justification'] === 'string' &&
+    (item['approverId'] === null || typeof item['approverId'] === 'string') &&
+    ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(String(item['status'])) &&
+    typeof item['version'] === 'number' && Number.isSafeInteger(item['version']) && item['version'] >= 0 &&
+    typeof item['updatedAt'] === 'string';
 }
