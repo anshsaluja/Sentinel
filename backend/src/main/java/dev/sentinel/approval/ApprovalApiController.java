@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,10 +22,15 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/approvals")
 public class ApprovalApiController {
     private final ApprovalPersistenceService approvals;
+    private final TransactionalApprovalService transitions;
 
-    public ApprovalApiController(ApprovalPersistenceService approvals) {
+    public ApprovalApiController(ApprovalPersistenceService approvals,
+                                 TransactionalApprovalService transitions) {
         this.approvals = approvals;
+        this.transitions = transitions;
     }
+
+    public record Decision(ApprovalWorkflow.Action action, Long expectedVersion) {}
 
     @GetMapping("/pending")
     public List<ApprovalWorkflow.Request> pending(@AuthenticationPrincipal Jwt jwt) {
@@ -44,6 +51,38 @@ public class ApprovalApiController {
             return approvals.find(tenantId, requestId);
         } catch (IllegalArgumentException notFound) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval not found");
+        }
+    }
+
+
+    /** Decisions use the validated JWT identity and atomically write the audit record. */
+    @PostMapping("/{requestId}/decision")
+    public ApprovalWorkflow.Request decide(@AuthenticationPrincipal Jwt jwt,
+                                            @PathVariable String requestId,
+                                            @RequestBody Decision decision) {
+        String tenantId = tenant(jwt);
+        requireReviewer(jwt);
+        if (requestId == null || !requestId.matches("[a-zA-Z0-9_.:-]{1,120}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid approval identifier");
+        }
+        if (decision == null || decision.action() == null || decision.expectedVersion() == null
+                || decision.expectedVersion() < 0 || decision.action() == ApprovalWorkflow.Action.CANCEL) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid review decision");
+        }
+        String userId = jwt.getSubject();
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing reviewer identity");
+        }
+        try {
+            return transitions.transition(requestId,
+                    new ApprovalWorkflow.Actor(tenantId, userId, true),
+                    decision.action(), decision.expectedVersion());
+        } catch (SecurityException forbidden) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review not permitted");
+        } catch (IllegalArgumentException notFound) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval not found or audit invalid");
+        } catch (IllegalStateException conflict) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Approval cannot be updated");
         }
     }
 
