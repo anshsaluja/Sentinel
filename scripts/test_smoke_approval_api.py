@@ -20,6 +20,8 @@ class ApprovalHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
         else:
             self.send_response(401)
+        if self.headers.get("Authorization") == "Bearer reviewer-test-token":
+            self.send_header("Content-Type", "application/json")
         self.end_headers()
 
     def log_message(self, *_args):
@@ -45,6 +47,19 @@ class ApprovalSmokeTests(unittest.TestCase):
 
     def test_reviewer_can_read(self):
         self.assertIn("returned 200", probe(self.url, "reviewer-test-token")[1])
+
+    def test_rejects_html_login_page_disguised_as_success(self):
+        from unittest.mock import patch
+
+        def html_response(handler):
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/html")
+            handler.end_headers()
+            handler.wfile.write(b"<html>Sign in</html>")
+
+        with patch.object(ApprovalHandler, "do_GET", html_response):
+            with self.assertRaisesRegex(RuntimeError, "did not return JSON"):
+                probe(self.url, "reviewer-test-token")
 
     def test_invalid_reviewer_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "expected 200"):
