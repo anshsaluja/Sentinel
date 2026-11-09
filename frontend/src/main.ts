@@ -53,6 +53,18 @@ const authConfig: AuthConfig = {
               <pre aria-live="polite">{{ previewResult() }}</pre>
             }
           </section>
+          <section aria-labelledby="risk-heading">
+            <h3 id="risk-heading">Access risk explorer</h3>
+            <p>Analyze illustrative grants or compare risk before and after removing an excessive privilege. These are sample inputs, not findings from your organization's directory.</p>
+            <button [disabled]="riskLoading()" (click)="runRiskAnalysis()">Analyze sample grants</button>
+            <button [disabled]="riskLoading()" (click)="runRiskComparison()">Compare proposed remediation</button>
+            @if (riskLoading()) { <p role="status">Analyzing sample grants…</p> }
+            @if (riskError()) { <p role="alert">{{ riskError() }}</p> }
+            @if (riskResult()) {
+              <h4>Risk analysis response</h4>
+              <pre aria-live="polite">{{ riskResult() }}</pre>
+            }
+          </section>
           <button (click)="logout()">Sign out</button>
         } @else {
           <h2>Secure workspace</h2>
@@ -73,6 +85,9 @@ class AppComponent implements OnInit {
   readonly previewLoading = signal(false);
   readonly previewError = signal('');
   readonly previewResult = signal('');
+  readonly riskLoading = signal(false);
+  readonly riskError = signal('');
+  readonly riskResult = signal('');
   private readonly api = new SentinelApiClient(() => this.oauth.getAccessToken() || null);
 
   readonly resourceId = signal('ledger');
@@ -130,6 +145,40 @@ class AppComponent implements OnInit {
     }
   }
 
+  private sampleGrants() {
+    return [
+      { tenantId: 'local-demo', userId: 'sample-analyst', resourceId: 'ledger', permission: '*', activeUser: true },
+      { tenantId: 'local-demo', userId: 'former-employee', resourceId: 'ledger', permission: 'read', activeUser: false },
+      { tenantId: 'local-demo', userId: 'sample-analyst', resourceId: 'payments', permission: 'payment:approve', activeUser: true },
+      { tenantId: 'local-demo', userId: 'sample-analyst', resourceId: 'payments', permission: 'payment:execute', activeUser: true },
+    ];
+  }
+
+  async runRiskAnalysis(): Promise<void> {
+    await this.runRisk(() => this.api.analyzeRisks({ grants: this.sampleGrants() }));
+  }
+
+  async runRiskComparison(): Promise<void> {
+    const before = this.sampleGrants();
+    const after = before.filter(grant => grant.permission !== '*');
+    await this.runRisk(() => this.api.compareRisks({ before, after }));
+  }
+
+  private async runRisk(operation: () => Promise<unknown>): Promise<void> {
+    if (this.riskLoading()) return;
+    this.riskLoading.set(true);
+    this.riskError.set('');
+    this.riskResult.set('');
+    try {
+      const response = await operation();
+      this.riskResult.set(JSON.stringify(response, null, 2) ?? 'Empty response');
+    } catch (error) {
+      this.riskError.set(error instanceof Error ? error.message : 'Risk preview failed');
+    } finally {
+      this.riskLoading.set(false);
+    }
+  }
+
   ngOnInit(): void { void this.initialize(); }
 
   async initialize(): Promise<void> {
@@ -155,7 +204,7 @@ class AppComponent implements OnInit {
   }
 
   login(): void { this.oauth.initCodeFlow(); }
-  logout(): void { this.oauth.logOut(); this.authenticated.set(false); this.previewResult.set(''); this.previewError.set(''); }
+  logout(): void { this.oauth.logOut(); this.authenticated.set(false); this.previewResult.set(''); this.previewError.set(''); this.riskResult.set(''); this.riskError.set(''); } 
 }
 
 bootstrapApplication(AppComponent, {
