@@ -39,6 +39,10 @@ def probe(base_url: str, token: str | None, timeout: float = 5.0) -> list[str]:
         try:
             with opener.open(request, timeout=timeout) as response:
                 response.read(1024)  # Bound reads; do not expose tenant data.
+                if bearer and response.status == 200:
+                    media_type = response.headers.get_content_type()
+                    if media_type != "application/json":
+                        raise RuntimeError("Authenticated approval queue did not return JSON")
                 return response.status
         except urllib.error.HTTPError as error:
             error.close()
