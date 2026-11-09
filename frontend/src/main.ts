@@ -38,7 +38,12 @@ const authConfig: AuthConfig = {
           <p>Tenant: <code>{{ tenantId() }}</code></p>
           <section aria-labelledby="preview-heading">
             <h3 id="preview-heading">Access policy preview</h3>
-            <p>Run a read-only evaluation and before/after simulation using sample rules for the local-demo tenant. These previews do not grant or change real permissions.</p>
+            <p>Explore read-only policy decisions for the local-demo tenant. Change the resource, action, and role, then compare access before and after removing an allow rule. No real permissions are modified.</p>
+            <div class="preview-inputs">
+              <label>Resource <input aria-label="Resource" [value]="resourceId()" (input)="resourceId.set($any($event.target).value)" maxlength="80" /></label>
+              <label>Action <select aria-label="Action" [value]="action()" (change)="action.set($any($event.target).value)"><option value="read">read</option><option value="write">write</option><option value="approve">approve</option></select></label>
+              <label>Role <input aria-label="Role" [value]="role()" (input)="role.set($any($event.target).value)" maxlength="80" /></label>
+            </div>
             <button [disabled]="previewLoading()" (click)="runEvaluation()">Evaluate sample access</button>
             <button [disabled]="previewLoading()" (click)="runSimulation()">Simulate removal of access</button>
             @if (previewLoading()) { <p role="status">Running preview…</p> }
@@ -70,31 +75,45 @@ class AppComponent implements OnInit {
   readonly previewResult = signal('');
   private readonly api = new SentinelApiClient(() => this.oauth.getAccessToken() || null);
 
-  private readonly sampleRequest = {
-    tenantId: 'local-demo',
-    resourceId: 'ledger',
-    action: 'read',
-    roles: ['analyst'],
-    attributes: { department: 'finance' },
-  };
-  private readonly sampleRule = {
-    ...this.sampleRequest,
-    effect: 'ALLOW' as const,
-  };
+  readonly resourceId = signal('ledger');
+  readonly action = signal('read');
+  readonly role = signal('analyst');
+
+  private previewInputs() {
+    const resourceId = this.resourceId().trim();
+    const role = this.role().trim();
+    if (!resourceId || !role) {
+      throw new Error('Resource and role are required for a policy preview');
+    }
+    if (!/^[a-zA-Z0-9_.:-]{1,80}$/.test(resourceId) || !/^[a-zA-Z0-9_.:-]{1,80}$/.test(role)) {
+      throw new Error('Resource and role may contain letters, numbers, dots, underscores, colons and hyphens');
+    }
+    const request = {
+      tenantId: 'local-demo',
+      resourceId,
+      action: this.action(),
+      roles: [role],
+      attributes: { department: 'finance' },
+    };
+    return { request, rule: { ...request, effect: 'ALLOW' as const } };
+  }
 
   async runEvaluation(): Promise<void> {
-    await this.runPreview(() => this.api.evaluate({
-      request: this.sampleRequest,
-      rules: [this.sampleRule],
-    }));
+    await this.runPreview(() => {
+      const { request, rule } = this.previewInputs();
+      return this.api.evaluate({ request, rules: [rule] });
+    });
   }
 
   async runSimulation(): Promise<void> {
-    await this.runPreview(() => this.api.simulate({
-      subjects: [{ userId: 'sample-analyst', request: this.sampleRequest }],
-      before: [this.sampleRule],
-      after: [],
-    }));
+    await this.runPreview(() => {
+      const { request, rule } = this.previewInputs();
+      return this.api.simulate({
+        subjects: [{ userId: 'sample-analyst', request }],
+        before: [rule],
+        after: [],
+      });
+    });
   }
 
   private async runPreview(operation: () => Promise<unknown>): Promise<void> {
