@@ -56,7 +56,11 @@ class ApprovalSmokeTests(unittest.TestCase):
 
     def test_rejects_token_line_breaks(self):
         with self.assertRaisesRegex(ValueError, "line breaks"):
-            probe(self.url, "token\\nInjected: value")
+            probe(self.url, "token\nInjected: value")
+
+    def test_rejects_carriage_return_in_token(self):
+        with self.assertRaisesRegex(ValueError, "line breaks"):
+            probe(self.url, "token\rInjected: value")
 
     def test_rejects_nonpositive_timeout(self):
         with self.assertRaisesRegex(ValueError, "Timeout"):
