@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only approval API smoke probe. Never prints access tokens or response bodies."""
 import argparse
+import json
 import os
 import sys
 import urllib.error
@@ -38,11 +39,17 @@ def probe(base_url: str, token: str | None, timeout: float = 5.0) -> list[str]:
         request = urllib.request.Request(endpoint, headers=headers, method="GET")
         try:
             with opener.open(request, timeout=timeout) as response:
-                response.read(1024)  # Bound reads; do not expose tenant data.
                 if bearer and response.status == 200:
                     media_type = response.headers.get_content_type()
                     if media_type != "application/json":
                         raise RuntimeError("Authenticated approval queue did not return JSON")
+                    payload = response.read(65537)  # Bound reads; never print tenant data.
+                    if len(payload) > 65536:
+                        raise RuntimeError("Authenticated approval response exceeds 64 KiB")
+                    try:
+                        json.loads(payload)
+                    except (ValueError, UnicodeDecodeError):
+                        raise RuntimeError("Authenticated approval queue returned invalid JSON") from None
                 return response.status
         except urllib.error.HTTPError as error:
             error.close()
