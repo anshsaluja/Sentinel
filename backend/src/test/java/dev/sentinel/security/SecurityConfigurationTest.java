@@ -20,7 +20,7 @@ class SecurityConfigurationTest {
         assertEquals("http://127.0.0.1:4200", config.checkOrigin("http://127.0.0.1:4200"));
         assertNull(config.checkOrigin("https://attacker.example"));
         assertNull(config.checkOrigin("http://localhost:4300"));
-        assertEquals(List.of("POST", "OPTIONS"), config.getAllowedMethods());
+        assertEquals(List.of("GET", "POST", "OPTIONS"), config.getAllowedMethods());
         assertEquals(Boolean.FALSE, config.getAllowCredentials());
     }
 
