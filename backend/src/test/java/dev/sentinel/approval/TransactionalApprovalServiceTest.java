@@ -48,6 +48,30 @@ class TransactionalApprovalServiceTest {
                 && doc.sequence == 1));
     }
 
+
+    @Test void auditHashSurvivesMongoMillisecondTimestampRoundTrip() {
+        Instant precise = Instant.parse("2026-11-08T10:00:00.123456789Z");
+        var preciseService = new TransactionalApprovalService(approvals, audits, history,
+                Clock.fixed(precise, ZoneOffset.UTC));
+        when(approvals.findByIdAndTenantId("req-1", "tenant-a"))
+                .thenReturn(Optional.of(pending()));
+        when(history.verifiedHistory("tenant-a")).thenReturn(List.of());
+        when(approvals.save(any())).thenAnswer(inv -> {
+            ApprovalDocument saved = inv.getArgument(0);
+            saved.version = 1L;
+            return saved;
+        });
+        preciseService.transition("req-1",
+                new ApprovalWorkflow.Actor("tenant-a", "bob", true),
+                ApprovalWorkflow.Action.APPROVE, 0);
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditDocument.class);
+        verify(audits).save(captor.capture());
+        var stored = captor.getValue();
+        assertEquals(Instant.parse("2026-11-08T10:00:00.123Z"), stored.occurredAt);
+        assertTrue(new dev.sentinel.audit.AuditChain().verify("tenant-a",
+                List.of(stored.toDomain())));
+    }
+
     @Test void crossTenantRecordCannotBeWritten() {
         when(approvals.findByIdAndTenantId("req-1", "tenant-b"))
                 .thenReturn(Optional.of(pending()));
