@@ -73,3 +73,22 @@ test('risk comparison uses the expected endpoint', async () => {
   await api.compareRisks({});
   assert.equal(endpoint, 'http://localhost:8080/api/v1/risks/compare');
 });
+
+test('cancelPendingRequests aborts in-flight previews and clears request state', async () => {
+  let started;
+  const pending = new Promise(resolve => { started = resolve; });
+  const api = new SentinelApiClient(() => 'token', undefined, async (_url, options) => {
+    started(options.signal);
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    });
+  });
+  const request = api.evaluate({});
+  const signal = await pending;
+  assert.equal(signal.aborted, false);
+  api.cancelPendingRequests();
+  assert.equal(signal.aborted, true);
+  await assert.rejects(request, e => e instanceof SentinelApiError &&
+    e.status === null && /cancelled/.test(e.message));
+  api.cancelPendingRequests(); // repeated logout is safe
+});
