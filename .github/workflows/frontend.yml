@@ -22,7 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+      - name: Validate Keycloak realm and API smoke probe contracts
+        working-directory: .
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
       - name: Run API transport regression tests
         run: npm test
       - name: Build Angular application
