@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ public class ApprovalRequestService {
     private final Clock clock;
     private final AuditChain chain = new AuditChain();
 
+    @Autowired
     public ApprovalRequestService(ApprovalRepository approvals, AuditRepository audits,
                                   AuditHistoryService history) {
         this(approvals, audits, history, Clock.systemUTC());
@@ -51,7 +53,11 @@ public class ApprovalRequestService {
         var event = chain.append(tenantId, requesterId, "REQUEST", request.id(), now, existing);
         // Mongo's unique (tenantId, sequence) index detects concurrent audit appends.
         // Any failure rolls back both writes; clients can retry with a new request.
-        var saved = approvals.save(new ApprovalDocument(request));
+        var document = new ApprovalDocument(request);
+        // A nullable @Version must be null for a new Spring Data Mongo entity.
+        // Persisting version 0 here would be treated as an existing document.
+        document.version = null;
+        var saved = approvals.save(document);
         if (!tenantId.equals(saved.tenantId)) {
             throw new SecurityException("Cross-tenant approval save result");
         }
