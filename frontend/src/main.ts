@@ -65,6 +65,22 @@ const authConfig: AuthConfig = {
               <pre aria-live="polite">{{ riskResult() }}</pre>
             }
           </section>
+          <section aria-labelledby="request-heading">
+            <h3 id="request-heading">Request access review</h3>
+            <p>Submit a resource and business justification. Your identity and tenant are derived from Keycloak; submitting does not grant access.</p>
+            <form (submit)="$event.preventDefault(); submitApproval()">
+              <label>Resource
+                <input aria-label="Requested resource" [value]="requestedResource()" (input)="requestedResource.set($any($event.target).value)" maxlength="200" required />
+              </label>
+              <label>Business justification
+                <textarea aria-label="Business justification" [value]="requestJustification()" (input)="requestJustification.set($any($event.target).value)" maxlength="2000" required></textarea>
+              </label>
+              <button type="submit" [disabled]="requestLoading() || !requestedResource().trim() || !requestJustification().trim()">Submit for review</button>
+            </form>
+            @if (requestLoading()) { <p role="status">Submitting request…</p> }
+            @if (requestError()) { <p role="alert">{{ requestError() }}</p> }
+            @if (requestNotice()) { <p role="status">{{ requestNotice() }}</p> }
+          </section>
           <section aria-labelledby="approvals-heading">
             <h3 id="approvals-heading">Pending access approvals</h3>
             <p>Review tenant-scoped requests. Decisions are audited by the backend and cannot be undone.</p>
@@ -109,6 +125,11 @@ class AppComponent implements OnInit {
   readonly riskError = signal('');
   readonly riskResult = signal('');
   readonly approvals = signal<ApprovalRequest[]>([]);
+  readonly requestedResource = signal('');
+  readonly requestJustification = signal('');
+  readonly requestLoading = signal(false);
+  readonly requestError = signal('');
+  readonly requestNotice = signal('');
   readonly approvalsLoading = signal(false);
   readonly approvalsError = signal('');
   readonly approvalsNotice = signal('');
@@ -209,6 +230,28 @@ class AppComponent implements OnInit {
     }
   }
 
+  async submitApproval(): Promise<void> {
+    if (!this.authenticated() || this.requestLoading()) return;
+    const epoch = this.sessionEpoch;
+    this.requestLoading.set(true);
+    this.requestError.set('');
+    this.requestNotice.set('');
+    try {
+      const created = await this.api.createApproval(this.requestedResource(), this.requestJustification());
+      if (epoch === this.sessionEpoch) {
+        this.requestedResource.set('');
+        this.requestJustification.set('');
+        this.requestNotice.set(`Request ${created.id} submitted for review. No permissions have been granted.`);
+        // The queue may be reviewer-only; don't assume the requester can read it.
+      }
+    } catch (error) {
+      if (epoch === this.sessionEpoch) this.requestError.set(
+        error instanceof Error ? error.message : 'Unable to submit access request');
+    } finally {
+      if (epoch === this.sessionEpoch) this.requestLoading.set(false);
+    }
+  }
+
   async loadApprovals(): Promise<void> {
     if (!this.authenticated() || this.approvalsLoading() || this.decisionId()) return;
     const epoch = this.sessionEpoch;
@@ -259,6 +302,11 @@ class AppComponent implements OnInit {
     this.previewLoading.set(false);
     this.riskLoading.set(false);
     this.approvals.set([]);
+    this.requestedResource.set('');
+    this.requestJustification.set('');
+    this.requestLoading.set(false);
+    this.requestError.set('');
+    this.requestNotice.set('');
     this.approvalsLoading.set(false);
     this.approvalsError.set('');
     this.approvalsNotice.set('');
@@ -302,6 +350,11 @@ class AppComponent implements OnInit {
     this.previewLoading.set(false);
     this.riskLoading.set(false);
     this.approvals.set([]);
+    this.requestedResource.set('');
+    this.requestJustification.set('');
+    this.requestLoading.set(false);
+    this.requestError.set('');
+    this.requestNotice.set('');
     this.approvalsLoading.set(false);
     this.approvalsError.set('');
     this.approvalsNotice.set('');
