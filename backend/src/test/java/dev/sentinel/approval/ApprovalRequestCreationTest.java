@@ -22,7 +22,12 @@ class ApprovalRequestCreationTest {
         var audits = mock(AuditRepository.class);
         var history = mock(AuditHistoryService.class);
         when(history.verifiedHistory("tenant-a")).thenReturn(List.of());
-        when(approvals.save(any(ApprovalDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(approvals.save(any(ApprovalDocument.class))).thenAnswer(invocation -> {
+            ApprovalDocument document = invocation.getArgument(0);
+            assertNull(document.version, "New Mongo document must have a null version");
+            document.version = 0L; // Spring Data initializes @Version after insert.
+            return document;
+        });
         var clock = Clock.fixed(Instant.parse("2026-11-09T20:00:00Z"), ZoneOffset.UTC);
         var service = new ApprovalRequestService(approvals, audits, history, clock);
         var controller = new ApprovalRequestController(service);
