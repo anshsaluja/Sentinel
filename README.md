@@ -8,7 +8,7 @@ Focused portfolio project for explaining and predicting access changes, not a fu
 - Read-only, deterministic before/after policy simulation.
 - Risk finding engine and associated unit tests (see backend sources).
 - Spring Boot REST policy/risk preview endpoints protected by JWT resource-server authentication.
-- Tenant-scoped MongoDB approval queue and detail reads, reviewer/admin approve/reject API, optimistic version checks, and transactional audit-chain writes.
+- Tenant-scoped MongoDB approval-request creation, queue and detail reads, reviewer/admin approve/reject API, optimistic version checks, and transactional audit-chain writes (not yet runtime-verified).
 - Angular PKCE sign-in, sample policy/risk explorers, and a reviewer approval queue with confirmation and conflict handling.
 - API derives tenant context from the verified JWT `tenant_id` claim; mismatched tenant inputs are rejected.
 - JUnit unit tests and MockMvc authentication/tenant-isolation test source.
@@ -47,7 +47,8 @@ For local services, copy `.env.example` to `.env`, supply a unique `KEYCLOAK_ADM
 - Run `cd frontend && npm ci && npm test && npm run build` to verify the Angular client and transport regressions.
 - Run `python3 -m unittest discover -s scripts -p 'test_*.py'` for static Keycloak realm checks.
 - Verify the real Keycloak login and reviewer role, Angular queue GET preflight, approval decision POST, MongoDB transaction, and audit integrity in one local walkthrough.
-- Populate an approval request through a documented, tenant-safe fixture/setup workflow; there is currently no end-user request creation UI.
+- Exercise `POST /api/v1/approval-requests` with a JWT-authenticated requester; confirm tenant and requester are taken from JWT claims, not caller-controlled JSON. Verify that a new request is `PENDING` and its creation audit event is committed in the same MongoDB transaction. The endpoint and tests are committed but have not yet been compiled or runtime-verified. There is currently no end-user request creation UI.
+- Check that an unauthenticated creation request is rejected, a requester cannot impersonate another tenant, and reviewer decisions reject stale versions; repeat against a running MongoDB replica set.
 - Improve the dashboard and guided demo, and keep CI green before calling the MVP complete.
 
 **Important:** The policy evaluation and risk exploration screens use caller-supplied/sample data; they are not live directory scanning or authorization enforcement. The approval workflow is persisted separately. Elasticsearch and gRPC remain deferred.
