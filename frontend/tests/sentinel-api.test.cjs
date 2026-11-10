@@ -212,3 +212,44 @@ test('approval conflict exposes only sanitized HTTP status', async () => {
     error instanceof SentinelApiError && error.status === 409 &&
     !error.message.includes('transaction'));
 });
+
+test('access request creation uses authenticated tenant-independent payload', async () => {
+  let captured;
+  const api = new SentinelApiClient(() => 'requester-token', undefined, async (url, options) => {
+    captured = { url: String(url), options };
+    return { ok: true, json: async () => ({ ...approval, version: 0 }) };
+  });
+  const created = await api.createApproval('  ledger  ', '  Quarterly audit  ');
+  assert.equal(created.status, 'PENDING');
+  assert.equal(captured.url, 'http://localhost:8080/api/v1/approval-requests');
+  assert.equal(captured.options.method, 'POST');
+  assert.equal(captured.options.headers.Authorization, 'Bearer requester-token');
+  assert.deepEqual(JSON.parse(captured.options.body), {
+    resourceId: 'ledger', justification: 'Quarterly audit',
+  });
+});
+
+test('invalid access requests are rejected before network transport', async () => {
+  let calls = 0;
+  const api = new SentinelApiClient(() => 'token', undefined, async () => { calls++; });
+  for (const [resource, reason] of [
+    ['', 'reason'], ['ledger', '   '], ['x'.repeat(201), 'reason'],
+    ['ledger', 'x'.repeat(2001)],
+  ]) {
+    await assert.rejects(api.createApproval(resource, reason), SentinelApiError);
+  }
+  assert.equal(calls, 0);
+});
+
+test('access request creation rejects non-pending or malformed server responses', async () => {
+  for (const payload of [
+    { ...approval, status: 'APPROVED' },
+    { id: 'req-1', status: 'PENDING' },
+    null,
+  ]) {
+    const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+      ok: true, json: async () => payload,
+    }));
+    await assert.rejects(api.createApproval('ledger', 'audit'), SentinelApiError);
+  }
+});
