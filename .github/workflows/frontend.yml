@@ -3,10 +3,14 @@ on:
   push:
     paths:
       - 'frontend/**'
+      - 'scripts/**'
+      - 'keycloak/**'
       - '.github/workflows/frontend.yml'
   pull_request:
     paths:
       - 'frontend/**'
+      - 'scripts/**'
+      - 'keycloak/**'
       - '.github/workflows/frontend.yml'
 permissions:
   contents: read
