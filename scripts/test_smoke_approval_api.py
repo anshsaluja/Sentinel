@@ -54,6 +54,10 @@ class ApprovalSmokeTests(unittest.TestCase):
         from unittest.mock import patch
 
         def html_response(handler):
+            if handler.headers.get("Authorization") != "Bearer reviewer-test-token":
+                handler.send_response(401)
+                handler.end_headers()
+                return
             handler.send_response(200)
             handler.send_header("Content-Type", "text/html")
             handler.end_headers()
@@ -67,6 +71,10 @@ class ApprovalSmokeTests(unittest.TestCase):
         from unittest.mock import patch
 
         def invalid_json(handler):
+            if handler.headers.get("Authorization") != "Bearer reviewer-test-token":
+                handler.send_response(401)
+                handler.end_headers()
+                return
             handler.send_response(200)
             handler.send_header("Content-Type", "application/json")
             handler.end_headers()
@@ -80,6 +88,10 @@ class ApprovalSmokeTests(unittest.TestCase):
         from unittest.mock import patch
 
         def object_response(handler):
+            if handler.headers.get("Authorization") != "Bearer reviewer-test-token":
+                handler.send_response(401)
+                handler.end_headers()
+                return
             handler.send_response(200)
             handler.send_header("Content-Type", "application/json")
             handler.end_headers()
@@ -93,6 +105,10 @@ class ApprovalSmokeTests(unittest.TestCase):
         from unittest.mock import patch
 
         def oversized(handler):
+            if handler.headers.get("Authorization") != "Bearer reviewer-test-token":
+                handler.send_response(401)
+                handler.end_headers()
+                return
             handler.send_response(200)
             handler.send_header("Content-Type", "application/json")
             handler.end_headers()
