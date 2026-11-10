@@ -104,6 +104,22 @@ export class SentinelApiClient {
     return this.post('/api/v1/risks/compare', request);
   }
 
+  async createApproval(resourceId: string, justification: string): Promise<ApprovalRequest> {
+    const resource = resourceId.trim();
+    const reason = justification.trim();
+    if (!resource || resource.length > 200 || !reason || reason.length > 2000) {
+      throw new SentinelApiError('Resource and justification are required and must fit their limits', null);
+    }
+    const payload = await this.post('/api/v1/approval-requests', {
+      resourceId: resource,
+      justification: reason,
+    });
+    if (!isApprovalRequest(payload) || payload.status !== 'PENDING') {
+      throw new SentinelApiError('Invalid approval creation response', null);
+    }
+    return payload;
+  }
+
   async pendingApprovals(): Promise<ApprovalRequest[]> {
     const payload = await this.request('/api/v1/approvals/pending', 'GET');
     if (!Array.isArray(payload) || !payload.every(isApprovalRequest)) {
