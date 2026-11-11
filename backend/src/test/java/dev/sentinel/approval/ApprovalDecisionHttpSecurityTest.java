@@ -125,6 +125,28 @@ class ApprovalDecisionHttpSecurityTest {
     }
 
     @Test
+    void reviewerWithoutSubjectCannotDecide() throws Exception {
+        mvc.perform(post(PATH).with(jwt().jwt(token -> token
+                        .claim("sub", "")
+                        .claim("tenant_id", "team-a")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                        .contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void reviewerCannotSubmitNegativeExpectedVersion() throws Exception {
+        mvc.perform(post(PATH).with(jwt().jwt(token -> token
+                        .subject("reviewer").claim("tenant_id", "team-a")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"APPROVE\",\"expectedVersion\":-1}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
     void angularPreflightCanReadApprovalQueue() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options(
                         "/api/v1/approvals/pending")
