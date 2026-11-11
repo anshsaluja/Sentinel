@@ -96,6 +96,35 @@ class ApprovalDecisionHttpSecurityTest {
     }
 
     @Test
+    void reviewerWithoutTenantClaimCannotReadQueue() throws Exception {
+        mvc.perform(get("/api/v1/approvals/pending").with(jwt().jwt(token -> token
+                        .subject("reviewer")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer"))))))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(approvals);
+    }
+
+    @Test
+    void adminCanReadQueueForTokenTenant() throws Exception {
+        mvc.perform(get("/api/v1/approvals/pending").with(jwt().jwt(token -> token
+                        .subject("admin").claim("tenant_id", "team-b")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-admin"))))))
+                .andExpect(status().isOk());
+        verify(approvals).pending("team-b");
+    }
+
+    @Test
+    void reviewerCannotCancelThroughDecisionEndpoint() throws Exception {
+        mvc.perform(post(PATH).with(jwt().jwt(token -> token
+                        .subject("reviewer").claim("tenant_id", "team-a")
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"CANCEL\",\"expectedVersion\":0}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
     void angularPreflightCanReadApprovalQueue() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options(
                         "/api/v1/approvals/pending")
