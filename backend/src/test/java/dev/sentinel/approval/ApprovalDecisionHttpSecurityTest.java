@@ -66,7 +66,7 @@ class ApprovalDecisionHttpSecurityTest {
     void reviewerCanReadOwnTenantQueue() throws Exception {
         mvc.perform(get("/api/v1/approvals/pending").with(jwt().jwt(token -> token
                         .subject("reviewer").claim("tenant_id", "team-a")
-                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer"))))))
                 .andExpect(status().isOk());
         verify(approvals).pending("team-a");
     }
@@ -90,7 +90,7 @@ class ApprovalDecisionHttpSecurityTest {
     void reviewerDetailLookupIsScopedToTokenTenant() throws Exception {
         mvc.perform(get("/api/v1/approvals/req-1").with(jwt().jwt(token -> token
                         .subject("reviewer").claim("tenant_id", "team-a")
-                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer")))))
+                        .claim("realm_access", Map.of("roles", List.of("sentinel-reviewer"))))))
                 .andExpect(status().isOk());
         verify(approvals).find("team-a", "req-1");
     }
