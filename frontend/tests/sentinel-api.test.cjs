@@ -217,7 +217,7 @@ test('access request creation uses authenticated tenant-independent payload', as
   let captured;
   const api = new SentinelApiClient(() => 'requester-token', undefined, async (url, options) => {
     captured = { url: String(url), options };
-    return { ok: true, json: async () => ({ ...approval, version: 0 }) };
+    return { ok: true, json: async () => ({ ...approval, justification: 'Quarterly audit', version: 0 }) };
   });
   const created = await api.createApproval('  ledger  ', '  Quarterly audit  ');
   assert.equal(created.status, 'PENDING');
@@ -251,6 +251,20 @@ test('access request creation rejects non-pending or malformed server responses'
       ok: true, json: async () => payload,
     }));
     await assert.rejects(api.createApproval('ledger', 'audit'), SentinelApiError);
+  }
+});
+
+test('creation rejects server responses for a different resource or justification', async () => {
+  for (const payload of [
+    { ...approval, resourceId: 'other-ledger' },
+    { ...approval, justification: 'Changed by server' },
+  ]) {
+    const api = new SentinelApiClient(() => 'requester-token', undefined, async () => ({
+      ok: true, json: async () => payload,
+    }));
+    await assert.rejects(api.createApproval('ledger', 'Temporary access'), error =>
+      error instanceof SentinelApiError && error.status === null &&
+      /Invalid approval creation response/.test(error.message));
   }
 });
 
