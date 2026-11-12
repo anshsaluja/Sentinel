@@ -137,7 +137,11 @@ export class SentinelApiClient {
       `/api/v1/approvals/${encodeURIComponent(id)}/decision`,
       'POST', { action, expectedVersion },
     );
-    if (!isApprovalRequest(payload)) {
+    const expectedStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    if (!isApprovalRequest(payload) ||
+        payload.id !== id ||
+        payload.status !== expectedStatus ||
+        payload.version <= expectedVersion) {
       throw new SentinelApiError('Invalid approval decision response', null);
     }
     return payload;
