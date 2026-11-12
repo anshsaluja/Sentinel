@@ -253,3 +253,38 @@ test('access request creation rejects non-pending or malformed server responses'
     await assert.rejects(api.createApproval('ledger', 'audit'), SentinelApiError);
   }
 });
+
+test('approval decisions accept a matching rejected response with advanced version', async () => {
+  const api = new SentinelApiClient(() => 'reviewer-token', undefined, async () => ({
+    ok: true, json: async () => ({ ...approval, status: 'REJECTED', version: 3 }),
+  }));
+  const result = await api.decideApproval('req-1', 'REJECT', 2);
+  assert.equal(result.status, 'REJECTED');
+  assert.equal(result.version, 3);
+});
+
+test('approval decisions reject contradictory statuses, request IDs, and stale versions', async () => {
+  const invalid = [
+    { ...approval, status: 'REJECTED', version: 3 }, // APPROVE cannot return REJECTED
+    { ...approval, status: 'PENDING', version: 3 }, // decision cannot remain pending
+    { ...approval, id: 'other-request', status: 'APPROVED', version: 3 },
+    { ...approval, status: 'APPROVED', version: 2 }, // version must advance
+    { ...approval, status: 'APPROVED', version: 1 },
+    { ...approval, status: 'APPROVED', version: Number.MAX_SAFE_INTEGER },
+    null,
+  ];
+  for (const payload of invalid) {
+    const api = new SentinelApiClient(() => 'reviewer-token', undefined, async () => ({
+      ok: true, json: async () => payload,
+    }));
+    if (payload && payload.version === Number.MAX_SAFE_INTEGER) {
+      // A safe integer is valid if it advances; do not reject it arbitrarily.
+      const result = await api.decideApproval('req-1', 'APPROVE', 2);
+      assert.equal(result.version, Number.MAX_SAFE_INTEGER);
+    } else {
+      await assert.rejects(api.decideApproval('req-1', 'APPROVE', 2), error =>
+        error instanceof SentinelApiError && error.status === null &&
+        /Invalid approval decision response/.test(error.message));
+    }
+  }
+});
