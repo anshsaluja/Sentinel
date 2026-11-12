@@ -114,7 +114,8 @@ export class SentinelApiClient {
       resourceId: resource,
       justification: reason,
     });
-    if (!isApprovalRequest(payload) || payload.status !== 'PENDING') {
+    if (!isApprovalRequest(payload) || payload.status !== 'PENDING' ||
+        payload.resourceId !== resource || payload.justification !== reason) {
       throw new SentinelApiError('Invalid approval creation response', null);
     }
     return payload;
