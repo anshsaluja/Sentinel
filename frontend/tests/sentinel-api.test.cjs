@@ -242,15 +242,22 @@ test('invalid access requests are rejected before network transport', async () =
 });
 
 test('access request creation rejects non-pending or malformed server responses', async () => {
+  // Keep the submitted fields identical to the valid fixture so each failure
+  // tests the response contract rather than an unrelated justification mismatch.
   for (const payload of [
     { ...approval, status: 'APPROVED' },
+    { ...approval, status: 'REJECTED' },
+    { ...approval, status: 'CANCELLED' },
+    { ...approval, version: -1 },
     { id: 'req-1', status: 'PENDING' },
     null,
   ]) {
     const api = new SentinelApiClient(() => 'token', undefined, async () => ({
       ok: true, json: async () => payload,
     }));
-    await assert.rejects(api.createApproval('ledger', 'audit'), SentinelApiError);
+    await assert.rejects(api.createApproval('ledger', 'Temporary access'), error =>
+      error instanceof SentinelApiError && error.status === null &&
+      /Invalid approval creation response/.test(error.message));
   }
 });
 
