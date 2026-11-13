@@ -133,6 +133,7 @@ export class SentinelApiClient {
 
   async decideApproval(id: string, action: 'APPROVE' | 'REJECT', expectedVersion: number): Promise<ApprovalRequest> {
     if (!/^[a-zA-Z0-9_.:-]{1,120}$/.test(id) ||
+        (action !== 'APPROVE' && action !== 'REJECT') ||
         !Number.isSafeInteger(expectedVersion) || expectedVersion < 0) {
       throw new SentinelApiError('Invalid approval request', null);
     }
