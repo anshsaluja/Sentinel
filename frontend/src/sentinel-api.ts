@@ -123,7 +123,9 @@ export class SentinelApiClient {
 
   async pendingApprovals(): Promise<ApprovalRequest[]> {
     const payload = await this.request('/api/v1/approvals/pending', 'GET');
-    if (!Array.isArray(payload) || !payload.every(isApprovalRequest)) {
+    if (!Array.isArray(payload) ||
+        !payload.every(item => isApprovalRequest(item) && item.status === 'PENDING') ||
+        new Set(payload.map(item => item.id)).size !== payload.length) {
       throw new SentinelApiError('Invalid approval queue response', null);
     }
     return payload;
