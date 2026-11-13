@@ -204,6 +204,33 @@ test('malformed approval queue responses are rejected', async () => {
   await assert.rejects(api.pendingApprovals(), SentinelApiError);
 });
 
+test('approval queue rejects decided records and duplicate request IDs', async () => {
+  for (const payload of [
+    [{ ...approval, status: 'APPROVED' }],
+    [{ ...approval, status: 'REJECTED' }],
+    [approval, { ...approval, requesterId: 'bob' }],
+  ]) {
+    const api = new SentinelApiClient(() => 'reviewer-token', undefined, async () => ({
+      ok: true, json: async () => payload,
+    }));
+    await assert.rejects(api.pendingApprovals(), error =>
+      error instanceof SentinelApiError && error.status === null &&
+      /Invalid approval queue response/.test(error.message));
+  }
+});
+
+test('approval queue accepts distinct pending requests and an empty queue', async () => {
+  for (const payload of [
+    [],
+    [approval, { ...approval, id: 'req-2', requesterId: 'bob' }],
+  ]) {
+    const api = new SentinelApiClient(() => 'reviewer-token', undefined, async () => ({
+      ok: true, json: async () => payload,
+    }));
+    assert.deepEqual(await api.pendingApprovals(), payload);
+  }
+});
+
 test('approval conflict exposes only sanitized HTTP status', async () => {
   const api = new SentinelApiClient(() => 'token', undefined, async () => ({
     ok: false, status: 409, text: async () => 'internal transaction details',
