@@ -382,3 +382,32 @@ test('approval decisions reject contradictory statuses, request IDs, and stale v
     }
   }
 });
+
+test('approval responses reject invalid or timezone-free timestamps', async () => {
+  for (const updatedAt of [
+    '', 'yesterday', '2026-11-14', '2026-11-14T06:00:00',
+    '2026-02-30T00:00:00Z', '2025-02-29T00:00:00Z',
+    '2026-13-01T00:00:00Z', '2026-11-14T24:00:00Z',
+    '2026-11-14T00:60:00Z', '2026-11-14T00:00:60Z',
+    '2026-11-14T00:00:00+24:00', '2026-11-14T00:00:00+05:60',
+    '2026-11-14T00:00:00.1234567890Z', null, 123,
+  ]) {
+    const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+      ok: true, json: async () => [{ ...approval, updatedAt }],
+    }));
+    await assert.rejects(api.pendingApprovals(), SentinelApiError, String(updatedAt));
+  }
+});
+
+test('approval responses accept valid timezone-aware timestamps and leap days', async () => {
+  for (const updatedAt of [
+    '2026-11-14T06:00:00Z', '2024-02-29T23:59:59.123456789Z',
+    '2000-02-29T00:00:00+05:30', '2026-11-14T06:00:00-05:00',
+  ]) {
+    const record = { ...approval, updatedAt };
+    const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+      ok: true, json: async () => [record],
+    }));
+    assert.deepEqual(await api.pendingApprovals(), [record]);
+  }
+});

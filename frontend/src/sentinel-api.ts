@@ -212,6 +212,25 @@ function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function isValidTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  // Require a timezone and a real calendar date; Date.parse normalizes invalid days.
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second, zone] = match;
+  const y = Number(year), m = Number(month), d = Number(day);
+  if (m < 1 || m > 12 || Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59) return false;
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (d < 1 || d > days[m - 1]) return false;
+  if (zone !== 'Z') {
+    const offsetHour = Number(zone.slice(1, 3));
+    const offsetMinute = Number(zone.slice(4, 6));
+    if (offsetHour > 23 || offsetMinute > 59) return false;
+  }
+  return true;
+}
+
 function isApprovalRequest(value: unknown): value is ApprovalRequest {
   if (typeof value !== 'object' || value === null) return false;
   const item = value as Record<string, unknown>;
@@ -224,5 +243,5 @@ function isApprovalRequest(value: unknown): value is ApprovalRequest {
     (item['approverId'] === null || isNonBlankString(item['approverId'])) &&
     ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(String(item['status'])) &&
     typeof item['version'] === 'number' && Number.isSafeInteger(item['version']) && item['version'] >= 0 &&
-    typeof item['updatedAt'] === 'string';
+    isValidTimestamp(item['updatedAt']);
 }
