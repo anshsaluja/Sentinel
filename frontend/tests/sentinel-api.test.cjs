@@ -232,6 +232,24 @@ test('malformed approval queue responses are rejected', async () => {
   await assert.rejects(api.pendingApprovals(), SentinelApiError);
 });
 
+test('approval responses reject blank identity and justification fields', async () => {
+  const invalid = [
+    { tenantId: '' },
+    { tenantId: '   ' },
+    { requesterId: '' },
+    { resourceId: '   ' },
+    { justification: '' },
+    { approverId: '   ' },
+  ];
+  for (const changes of invalid) {
+    const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+      ok: true, json: async () => [{ ...approval, ...changes }],
+    }));
+    await assert.rejects(api.pendingApprovals(), error =>
+      error instanceof SentinelApiError && /Invalid approval queue response/.test(error.message));
+  }
+});
+
 test('approval queue rejects decided records and duplicate request IDs', async () => {
   for (const payload of [
     [{ ...approval, status: 'APPROVED' }],
