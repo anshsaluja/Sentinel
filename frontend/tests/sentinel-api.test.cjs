@@ -197,6 +197,34 @@ test('invalid approval identifiers and versions never reach the network', async 
   assert.equal(calls, 0);
 });
 
+test('dot-segment approval IDs never reach the network', async () => {
+  let calls = 0;
+  const api = new SentinelApiClient(() => 'token', undefined, async () => { calls++; });
+  for (const id of ['.', '..']) {
+    await assert.rejects(api.decideApproval(id, 'APPROVE', 0), error =>
+      error instanceof SentinelApiError && error.status === null);
+  }
+  assert.equal(calls, 0);
+});
+
+test('approval queue rejects dot-segment IDs from server responses', async () => {
+  for (const id of ['.', '..']) {
+    const api = new SentinelApiClient(() => 'token', undefined, async () => ({
+      ok: true, json: async () => [{ ...approval, id }],
+    }));
+    await assert.rejects(api.pendingApprovals(), SentinelApiError);
+  }
+});
+
+test('unsupported approval actions never reach the network', async () => {
+  let calls = 0;
+  const api = new SentinelApiClient(() => 'token', undefined, async () => { calls++; });
+  for (const action of ['CANCEL', 'APPROVED', '', null, undefined, 7, {}, []]) {
+    await assert.rejects(api.decideApproval('req-1', action, 2), SentinelApiError);
+  }
+  assert.equal(calls, 0);
+});
+
 test('malformed approval queue responses are rejected', async () => {
   const api = new SentinelApiClient(() => 'token', undefined, async () => ({
     ok: true, json: async () => [{ id: 'req-1', status: 'PENDING' }],

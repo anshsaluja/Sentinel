@@ -132,7 +132,7 @@ export class SentinelApiClient {
   }
 
   async decideApproval(id: string, action: 'APPROVE' | 'REJECT', expectedVersion: number): Promise<ApprovalRequest> {
-    if (!/^[a-zA-Z0-9_.:-]{1,120}$/.test(id) ||
+    if (!isValidApprovalId(id) ||
         (action !== 'APPROVE' && action !== 'REJECT') ||
         !Number.isSafeInteger(expectedVersion) || expectedVersion < 0) {
       throw new SentinelApiError('Invalid approval request', null);
@@ -203,11 +203,16 @@ export class SentinelApiClient {
   }
 }
 
+function isValidApprovalId(id: unknown): id is string {
+  return typeof id === 'string' && id !== '.' && id !== '..' &&
+    /^[a-zA-Z0-9_.:-]{1,120}$/.test(id);
+}
+
 function isApprovalRequest(value: unknown): value is ApprovalRequest {
   if (typeof value !== 'object' || value === null) return false;
   const item = value as Record<string, unknown>;
   return typeof item['id'] === 'string' &&
-    /^[a-zA-Z0-9_.:-]{1,120}$/.test(item['id']) &&
+    isValidApprovalId(item['id']) &&
     typeof item['tenantId'] === 'string' &&
     typeof item['requesterId'] === 'string' &&
     typeof item['resourceId'] === 'string' &&
