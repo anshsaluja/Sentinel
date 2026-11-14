@@ -208,16 +208,20 @@ function isValidApprovalId(id: unknown): id is string {
     /^[a-zA-Z0-9_.:-]{1,120}$/.test(id);
 }
 
+function isNonBlankString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 function isApprovalRequest(value: unknown): value is ApprovalRequest {
   if (typeof value !== 'object' || value === null) return false;
   const item = value as Record<string, unknown>;
   return typeof item['id'] === 'string' &&
     isValidApprovalId(item['id']) &&
-    typeof item['tenantId'] === 'string' &&
-    typeof item['requesterId'] === 'string' &&
-    typeof item['resourceId'] === 'string' &&
-    typeof item['justification'] === 'string' &&
-    (item['approverId'] === null || typeof item['approverId'] === 'string') &&
+    isNonBlankString(item['tenantId']) &&
+    isNonBlankString(item['requesterId']) &&
+    isNonBlankString(item['resourceId']) &&
+    isNonBlankString(item['justification']) &&
+    (item['approverId'] === null || isNonBlankString(item['approverId'])) &&
     ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(String(item['status'])) &&
     typeof item['version'] === 'number' && Number.isSafeInteger(item['version']) && item['version'] >= 0 &&
     typeof item['updatedAt'] === 'string';
