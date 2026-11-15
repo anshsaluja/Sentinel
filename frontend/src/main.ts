@@ -136,6 +136,8 @@ class AppComponent implements OnInit {
   readonly decisionId = signal('');
   // Invalidate outstanding preview responses when the session changes.
   private sessionEpoch = 0;
+  // Invalidate queue loads when a decision begins, even within the same session.
+  private approvalsRevision = 0;
   private readonly api = new SentinelApiClient(() => this.oauth.getAccessToken() || null);
 
   readonly resourceId = signal('ledger');
@@ -255,17 +257,18 @@ class AppComponent implements OnInit {
   async loadApprovals(): Promise<void> {
     if (!this.authenticated() || this.approvalsLoading() || this.decisionId()) return;
     const epoch = this.sessionEpoch;
+    const revision = ++this.approvalsRevision;
     this.approvalsLoading.set(true);
     this.approvalsError.set('');
     this.approvalsNotice.set('');
     try {
       const queue = await this.api.pendingApprovals();
-      if (epoch === this.sessionEpoch) this.approvals.set(queue);
+      if (epoch === this.sessionEpoch && revision === this.approvalsRevision) this.approvals.set(queue);
     } catch (error) {
-      if (epoch === this.sessionEpoch) this.approvalsError.set(
+      if (epoch === this.sessionEpoch && revision === this.approvalsRevision) this.approvalsError.set(
         error instanceof Error ? error.message : 'Unable to load approvals');
     } finally {
-      if (epoch === this.sessionEpoch) this.approvalsLoading.set(false);
+      if (epoch === this.sessionEpoch && revision === this.approvalsRevision) this.approvalsLoading.set(false);
     }
   }
 
@@ -273,6 +276,9 @@ class AppComponent implements OnInit {
     if (!this.authenticated() || this.decisionId() || approval.status !== 'PENDING') return;
     if (!window.confirm(`${action === 'APPROVE' ? 'Approve' : 'Reject'} access request ${approval.id}?`)) return;
     const epoch = this.sessionEpoch;
+    ++this.approvalsRevision;
+    // A superseded queue load may never settle; release its loading state now.
+    this.approvalsLoading.set(false);
     this.decisionId.set(approval.id);
     this.approvalsError.set('');
     this.approvalsNotice.set('');
@@ -297,6 +303,7 @@ class AppComponent implements OnInit {
   async initialize(): Promise<void> {
     // Reinitialization must not allow responses from a previous session to render.
     const epoch = ++this.sessionEpoch;
+    ++this.approvalsRevision;
     this.api.cancelPendingRequests();
     this.authenticated.set(false);
     this.previewLoading.set(false);
@@ -341,6 +348,7 @@ class AppComponent implements OnInit {
   login(): void { this.oauth.initCodeFlow(); }
   logout(): void {
     this.sessionEpoch++;
+    ++this.approvalsRevision;
     this.api.cancelPendingRequests();
     this.loading.set(false);
     this.error.set('');
