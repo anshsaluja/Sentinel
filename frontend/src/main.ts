@@ -238,11 +238,14 @@ class AppComponent implements OnInit {
     this.requestLoading.set(true);
     this.requestError.set('');
     this.requestNotice.set('');
+    // Capture exactly what is submitted; don't erase edits made while the API is pending.
+    const submittedResource = this.requestedResource();
+    const submittedJustification = this.requestJustification();
     try {
-      const created = await this.api.createApproval(this.requestedResource(), this.requestJustification());
+      const created = await this.api.createApproval(submittedResource, submittedJustification);
       if (epoch === this.sessionEpoch) {
-        this.requestedResource.set('');
-        this.requestJustification.set('');
+        if (this.requestedResource() === submittedResource) this.requestedResource.set('');
+        if (this.requestJustification() === submittedJustification) this.requestJustification.set('');
         this.requestNotice.set(`Request ${created.id} submitted for review. No permissions have been granted.`);
         // The queue may be reviewer-only; don't assume the requester can read it.
       }
