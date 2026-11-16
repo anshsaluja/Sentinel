@@ -53,6 +53,23 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertNotIn("PASS", result.stdout)
 
+    def test_services_success(self):
+        result = self.run_preflight("--services")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PASS MongoDB replica set primary", result.stdout)
+        self.assertIn("PASS Keycloak OIDC discovery", result.stdout)
+
+    def test_multiple_arguments_rejected(self):
+        result = self.run_preflight("--services", "--unexpected")
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn("PASS", result.stdout)
+
+    def test_help_does_not_execute_checks(self):
+        result = self.run_preflight("--help")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage:", result.stdout)
+        self.assertNotIn("PASS", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
