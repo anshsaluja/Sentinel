@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only prerequisites check for the host-run Sentinel demo.
 set -uo pipefail
-if [[ "${1:-}" == "--help" ]]; then
+if [[ "${1:-}" == "--help" && $# -eq 1 ]]; then
   echo "Usage: bash scripts/preflight-local-demo.sh [--services]"
   exit 0
 fi
