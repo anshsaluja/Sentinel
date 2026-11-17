@@ -87,3 +87,30 @@ test('rejects non-pending entries rather than showing them in reviewer queue', a
     );
   }
 });
+
+test('rejects malformed approval identifiers and unsafe versions', async () => {
+  for (const id of ['', '.', '..', '../other', 'a/b', 'x'.repeat(121)]) {
+    await assert.rejects(clientFor([{ ...request, id }]).pendingApprovals(), SentinelApiError);
+  }
+  for (const version of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1', null]) {
+    await assert.rejects(clientFor([{ ...request, version }]).pendingApprovals(), SentinelApiError);
+  }
+});
+
+test('rejects impossible, timezone-free, and malformed approval timestamps', async () => {
+  for (const updatedAt of [
+    '2026-02-30T12:00:00Z', '2026-11-17T12:00:00',
+    '2026-11-17T25:00:00Z', 'not-a-date', null,
+  ]) {
+    await assert.rejects(clientFor([{ ...request, updatedAt }]).pendingApprovals(), SentinelApiError);
+  }
+});
+
+test('rejects blank required approval fields and invalid approver identities', async () => {
+  for (const field of ['requesterId', 'resourceId', 'justification']) {
+    await assert.rejects(clientFor([{ ...request, [field]: '   ' }]).pendingApprovals(), SentinelApiError);
+  }
+  for (const approverId of ['', '   ', 42]) {
+    await assert.rejects(clientFor([{ ...request, approverId }]).pendingApprovals(), SentinelApiError);
+  }
+});
