@@ -63,3 +63,27 @@ test('rejects mixed-tenant queues regardless of item ordering', async () => {
     await assert.rejects(clientFor(queue).pendingApprovals(), SentinelApiError);
   }
 });
+
+test('rejects missing, blank, and non-string tenant identifiers', async () => {
+  for (const tenantId of [undefined, null, '', '   ', 42]) {
+    await assert.rejects(
+      clientFor([{ ...request, tenantId }]).pendingApprovals(),
+      error => error instanceof SentinelApiError &&
+        error.message === 'Invalid approval queue response',
+    );
+  }
+});
+
+test('rejects duplicate approval IDs even within a single tenant', async () => {
+  const queue = [request, { ...request, requesterId: 'bob' }];
+  await assert.rejects(clientFor(queue).pendingApprovals(), SentinelApiError);
+});
+
+test('rejects non-pending entries rather than showing them in reviewer queue', async () => {
+  for (const status of ['APPROVED', 'REJECTED', 'CANCELLED', 'UNKNOWN']) {
+    await assert.rejects(
+      clientFor([{ ...request, status }]).pendingApprovals(),
+      SentinelApiError,
+    );
+  }
+});
