@@ -390,6 +390,9 @@ test('approval responses reject invalid or timezone-free timestamps', async () =
     '2026-13-01T00:00:00Z', '2026-11-14T24:00:00Z',
     '2026-11-14T00:60:00Z', '2026-11-14T00:00:60Z',
     '2026-11-14T00:00:00+24:00', '2026-11-14T00:00:00+05:60',
+    '2026-11-14T00:00:00+14:01', '2026-11-14T00:00:00-14:01',
+    '2026-11-14T00:00:00+23:59', '2026-11-14T00:00:00-23:59',
+    '2026-11-14T00:00:00+15:00', '2026-11-14T00:00:00-14:30',
     '2026-11-14T00:00:00.1234567890Z', null, 123,
   ]) {
     const api = new SentinelApiClient(() => 'token', undefined, async () => ({
@@ -403,6 +406,8 @@ test('approval responses accept valid timezone-aware timestamps and leap days', 
   for (const updatedAt of [
     '2026-11-14T06:00:00Z', '2024-02-29T23:59:59.123456789Z',
     '2000-02-29T00:00:00+05:30', '2026-11-14T06:00:00-05:00',
+    '2026-11-14T06:00:00+14:00', '2026-11-14T06:00:00-14:00',
+    '2026-11-14T06:00:00+00:00',
   ]) {
     const record = { ...approval, updatedAt };
     const api = new SentinelApiClient(() => 'token', undefined, async () => ({
