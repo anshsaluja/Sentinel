@@ -227,7 +227,7 @@ function isValidTimestamp(value: unknown): value is string {
   if (zone !== 'Z') {
     const offsetHour = Number(zone.slice(1, 3));
     const offsetMinute = Number(zone.slice(4, 6));
-    if (offsetHour > 23 || offsetMinute > 59) return false;
+    if (offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) return false;
   }
   return true;
 }
