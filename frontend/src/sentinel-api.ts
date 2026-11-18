@@ -175,6 +175,8 @@ export class SentinelApiClient {
         ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
         cache: 'no-store',
+        // Never forward bearer-authenticated requests through HTTP redirects.
+        redirect: 'error',
       });
       if (!response.ok) {
         // Do not surface raw backend error bodies: they can contain sensitive details.
