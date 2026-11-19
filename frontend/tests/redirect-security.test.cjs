@@ -62,3 +62,20 @@ for (const status of [200, 401, 403, 409]) {
     });
   });
 }
+
+test('redirect:error rejects HTTP 302 without a Location header', async () => {
+  let requests = 0;
+  await withServer((_req, res) => {
+    requests++;
+    res.writeHead(302, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({error: 'missing_redirect_location'}));
+  }, async base => {
+    await assert.rejects(fetch(`${base}/approval`, {
+      method: 'POST',
+      headers: {Authorization: 'Bearer test-only', 'Content-Type': 'application/json'},
+      body: JSON.stringify({decision: 'approve'}),
+      redirect: 'error'
+    }), TypeError);
+  });
+  assert.equal(requests, 1);
+});
