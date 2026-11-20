@@ -207,6 +207,11 @@ export class SentinelApiClient {
       if (controller.signal.aborted) {
         throw new SentinelApiError('Sentinel API request was cancelled or timed out', null);
       }
+      // Network and JSON decoding failures can also race a token rotation.
+      // Do not report a stale session's transport failure as a current-session error.
+      if (this.accessToken() !== token) {
+        throw new SentinelApiError('Sentinel authentication changed during the request', 401);
+      }
       throw new SentinelApiError('Unable to reach the local Sentinel API', null);
     } finally {
       clearTimeout(timer);
