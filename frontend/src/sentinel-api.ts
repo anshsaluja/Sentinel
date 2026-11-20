@@ -178,6 +178,15 @@ export class SentinelApiClient {
         // Never forward bearer-authenticated requests through HTTP redirects.
         redirect: 'error',
       });
+      // Logout or token rotation may happen while fetch is resolving, including
+      // when the server returns an unsuccessful response. Session state wins
+      // over HTTP status so stale requests cannot surface misleading errors.
+      if (controller.signal.aborted) {
+        throw new SentinelApiError('Sentinel API request was cancelled or timed out', null);
+      }
+      if (this.accessToken() !== token) {
+        throw new SentinelApiError('Sentinel authentication changed during the request', 401);
+      }
       if (!response.ok) {
         // Do not surface raw backend error bodies: they can contain sensitive details.
         throw new SentinelApiError(`Sentinel API returned HTTP ${response.status}`, response.status);
