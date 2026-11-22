@@ -268,8 +268,12 @@ class AppComponent implements OnInit {
       const queue = await this.api.pendingApprovals();
       if (epoch === this.sessionEpoch && revision === this.approvalsRevision) this.approvals.set(queue);
     } catch (error) {
-      if (epoch === this.sessionEpoch && revision === this.approvalsRevision) this.approvalsError.set(
-        error instanceof Error ? error.message : 'Unable to load approvals');
+      if (epoch === this.sessionEpoch && revision === this.approvalsRevision) {
+        // A failed refresh cannot establish that cached requests are still pending.
+        // Fail closed instead of leaving potentially outdated decisions actionable.
+        this.approvals.set([]);
+        this.approvalsError.set(error instanceof Error ? error.message : 'Unable to load approvals');
+      }
     } finally {
       if (epoch === this.sessionEpoch && revision === this.approvalsRevision) this.approvalsLoading.set(false);
     }
