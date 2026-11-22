@@ -293,8 +293,10 @@ class AppComponent implements OnInit {
       }
     } catch (error) {
       if (epoch === this.sessionEpoch) {
-        this.approvalsError.set(error instanceof Error ? error.message : 'Decision failed');
-        // On conflict, require an explicit refresh rather than retrying a stale version.
+        // The server may have accepted the decision even if the response was lost.
+        // Clear the entire snapshot so a reviewer cannot act on stale versions.
+        this.approvals.set([]);
+        this.approvalsError.set(`${error instanceof Error ? error.message : 'Decision failed'} Refresh approvals to confirm the current status before deciding again.`);
       }
     } finally {
       if (epoch === this.sessionEpoch) this.decisionId.set('');
