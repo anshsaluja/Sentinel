@@ -281,6 +281,10 @@ class AppComponent implements OnInit {
 
   async decide(approval: ApprovalRequest, action: 'APPROVE' | 'REJECT'): Promise<void> {
     if (!this.authenticated() || this.approvalsLoading() || this.decisionId() || approval.status !== 'PENDING') return;
+    // Only act on the current queue snapshot; stale component references must not
+    // submit a decision after the queue was invalidated or refreshed.
+    const current = this.approvals().find(item => item.id === approval.id);
+    if (!current || current.status !== 'PENDING' || current.version !== approval.version) return;
     if (!window.confirm(`${action === 'APPROVE' ? 'Approve' : 'Reject'} access request ${approval.id}?`)) return;
     const epoch = this.sessionEpoch;
     ++this.approvalsRevision;
