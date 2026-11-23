@@ -122,3 +122,46 @@ test('logout prevents outstanding queue response from repopulating UI', async ()
   assert.deepEqual(app.approvals(), []);
   assert.equal(app.authenticated(), false);
 });
+
+test('concurrent decision attempts submit only one backend request', async () => {
+  await withConfirm(async () => {
+    const pending = deferred();
+    const calls = [];
+    const app = setup({
+      decideApproval: (id, action, version) => {
+        calls.push({ id, action, version });
+        return pending.promise;
+      },
+    });
+    app.approvals.set([approval]);
+    const first = app.decide(approval, 'APPROVE');
+    await app.decide(approval, 'REJECT');
+    assert.deepEqual(calls, [{ id: approval.id, action: 'APPROVE', version: approval.version }]);
+    assert.equal(app.decisionId(), approval.id);
+    pending.resolve({ status: 'APPROVED' });
+    await first;
+    assert.equal(app.decisionId(), '');
+    assert.deepEqual(app.approvals(), []);
+    assert.match(app.approvalsNotice(), /approved/);
+  });
+});
+
+test('refresh-time decision blocking preserves a single authoritative queue', async () => {
+  await withConfirm(async () => {
+    const pending = deferred();
+    let decisions = 0;
+    const app = setup({
+      pendingApprovals: () => pending.promise,
+      decideApproval: async () => { decisions++; },
+    });
+    app.approvals.set([approval]);
+    const refresh = app.loadApprovals();
+    await app.decide(approval, 'APPROVE');
+    assert.equal(decisions, 0);
+    pending.resolve([{ ...approval, version: 3 }]);
+    await refresh;
+    await app.decide(approval, 'APPROVE');
+    assert.equal(decisions, 0);
+    assert.equal(app.approvals()[0].version, 3);
+  });
+});
