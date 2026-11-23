@@ -96,8 +96,8 @@ const authConfig: AuthConfig = {
                 <h4>{{ approval.resourceId }}</h4>
                 <p>Requested by {{ approval.requesterId }} · Version {{ approval.version }}</p>
                 <p>{{ approval.justification }}</p>
-                <button [disabled]="decisionId() !== ''" (click)="decide(approval, 'APPROVE')">Approve</button>
-                <button [disabled]="decisionId() !== ''" (click)="decide(approval, 'REJECT')">Reject</button>
+                <button [disabled]="approvalsLoading() || decisionId() !== ''" (click)="decide(approval, 'APPROVE')">Approve</button>
+                <button [disabled]="approvalsLoading() || decisionId() !== ''" (click)="decide(approval, 'REJECT')">Reject</button>
               </article>
             }
           </section>
@@ -280,7 +280,7 @@ class AppComponent implements OnInit {
   }
 
   async decide(approval: ApprovalRequest, action: 'APPROVE' | 'REJECT'): Promise<void> {
-    if (!this.authenticated() || this.decisionId() || approval.status !== 'PENDING') return;
+    if (!this.authenticated() || this.approvalsLoading() || this.decisionId() || approval.status !== 'PENDING') return;
     if (!window.confirm(`${action === 'APPROVE' ? 'Approve' : 'Reject'} access request ${approval.id}?`)) return;
     const epoch = this.sessionEpoch;
     ++this.approvalsRevision;
