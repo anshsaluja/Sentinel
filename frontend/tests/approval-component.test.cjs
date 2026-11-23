@@ -1,0 +1,124 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const Module = require('node:module');
+const ts = require('typescript');
+
+// Transpile the actual component; mock only Angular's renderer and dependencies.
+const filename = path.resolve(__dirname, '../src/main.ts');
+const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+  fileName: filename, reportDiagnostics: true,
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+    experimentalDecorators: true, useDefineForClassFields: false },
+});
+assert.equal((compiled.diagnostics || []).filter(d => d.category === ts.DiagnosticCategory.Error).length, 0);
+let App;
+const oauth = { getAccessToken: () => 'token', configure() {},
+  setupAutomaticSilentRefresh() {}, loadDiscoveryDocumentAndTryLogin: async () => {},
+  hasValidAccessToken: () => true, getIdentityClaims: () => ({}),
+  logOut() {}, initCodeFlow() {} };
+function signal(initial) {
+  let value = initial;
+  const read = () => value;
+  read.set = next => { value = next; };
+  return read;
+}
+const mocks = {
+  '@angular/core': { Component: () => klass => { App = klass; return klass; },
+    inject: () => oauth, signal },
+  '@angular/platform-browser': { bootstrapApplication: async () => {} },
+  '@angular/common/http': { provideHttpClient: () => ({}) },
+  'angular-oauth2-oidc': { OAuthService: class {}, provideOAuthClient: () => ({}) },
+  './sentinel-api': { SentinelApiClient: class { cancelPendingRequests() {} } },
+};
+const originalWindow = global.window;
+global.window = { location: { origin: 'http://localhost:4200' }, confirm: () => true };
+try {
+  const mod = new Module(filename, module);
+  mod.filename = filename;
+  mod.paths = Module._nodeModulePaths(path.dirname(filename));
+  mod.require = name => Object.hasOwn(mocks, name) ? mocks[name] : require(name);
+  mod._compile(compiled.outputText, filename);
+} finally {
+  if (originalWindow === undefined) delete global.window;
+  else global.window = originalWindow;
+}
+assert.equal(typeof App, 'function');
+const approval = { id: 'req-1', tenantId: 'local-demo', requesterId: 'alice',
+  approverId: null, resourceId: 'ledger', justification: 'Audit',
+  status: 'PENDING', version: 2, updatedAt: '2026-11-23T00:00:00Z' };
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+function setup(api) {
+  const app = new App();
+  app.authenticated.set(true);
+  Object.assign(app.api, api);
+  return app;
+}
+async function withConfirm(fn) {
+  const previous = global.window;
+  global.window = { confirm: () => true };
+  try { await fn(); }
+  finally {
+    if (previous === undefined) delete global.window;
+    else global.window = previous;
+  }
+}
+test('failed queue refresh clears stale decisions', async () => {
+  let decisions = 0;
+  const app = setup({ pendingApprovals: async () => { throw Error('offline'); },
+    decideApproval: async () => { decisions++; } });
+  app.approvals.set([approval]);
+  await app.loadApprovals();
+  assert.deepEqual(app.approvals(), []);
+  assert.match(app.approvalsError(), /offline/);
+  await app.decide(approval, 'APPROVE');
+  assert.equal(decisions, 0);
+});
+test('refresh in progress blocks decisions', async () => {
+  const pending = deferred();
+  let decisions = 0;
+  const app = setup({ pendingApprovals: () => pending.promise,
+    decideApproval: async () => { decisions++; } });
+  app.approvals.set([approval]);
+  const refresh = app.loadApprovals();
+  await app.decide(approval, 'REJECT');
+  assert.equal(decisions, 0);
+  pending.resolve([approval]);
+  await refresh;
+  assert.equal(app.approvalsLoading(), false);
+});
+test('stale queue versions and removed references cannot be decided', async () => {
+  let decisions = 0;
+  const app = setup({ decideApproval: async () => { decisions++; } });
+  app.approvals.set([{ ...approval, version: 3 }]);
+  await app.decide(approval, 'APPROVE');
+  app.approvals.set([]);
+  await app.decide(approval, 'APPROVE');
+  assert.equal(decisions, 0);
+});
+test('uncertain decision failure invalidates queue', async () => {
+  await withConfirm(async () => {
+    const app = setup({ decideApproval: async () => { throw Error('lost response'); } });
+    app.approvals.set([approval]);
+    await app.decide(approval, 'APPROVE');
+    assert.deepEqual(app.approvals(), []);
+    assert.match(app.approvalsError(), /Refresh approvals/);
+    assert.equal(app.decisionId(), '');
+  });
+});
+test('logout prevents outstanding queue response from repopulating UI', async () => {
+  const pending = deferred();
+  const app = setup({ pendingApprovals: () => pending.promise });
+  const refresh = app.loadApprovals();
+  app.logout();
+  pending.resolve([approval]);
+  await refresh;
+  assert.deepEqual(app.approvals(), []);
+  assert.equal(app.authenticated(), false);
+});
