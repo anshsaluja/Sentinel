@@ -15,7 +15,11 @@ test('queue load captures a new revision and guards successful responses', () =>
 });
 
 test('outdated queue failures cannot overwrite newer errors', () => {
-  assert.match(source, /if \(epoch === this\.sessionEpoch && revision === this\.approvalsRevision\) this\.approvalsError\.set/);
+  const load = source.match(/async loadApprovals\(\): Promise<void> \{[\s\S]*?\n  \}/);
+  assert.ok(load, 'approval queue loader must exist');
+  // Both the fail-closed queue reset and error update must remain inside the
+  // same session/revision guard. The catch block intentionally has braces.
+  assert.match(load[0], /catch \(error\) \{\s*if \(epoch === this\.sessionEpoch && revision === this\.approvalsRevision\) \{\s*(?:\/\/[^\n]*\n\s*)*this\.approvals\.set\(\[\]\);\s*this\.approvalsError\.set\([^\n]*\);\s*\}/);
 });
 
 test('outdated queue finalizers cannot clear a newer loading state', () => {

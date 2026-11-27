@@ -50,9 +50,9 @@ const approval = { id: 'req-1', tenantId: 'local-demo', requesterId: 'alice',
   approverId: null, resourceId: 'ledger', justification: 'Audit',
   status: 'PENDING', version: 2, updatedAt: '2026-11-23T00:00:00Z' };
 function deferred() {
-  let resolve;
-  const promise = new Promise(done => { resolve = done; });
-  return { promise, resolve };
+  let resolve, reject;
+  const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 function setup(api) {
   const app = new App();
@@ -164,4 +164,58 @@ test('refresh-time decision blocking preserves a single authoritative queue', as
     assert.equal(decisions, 0);
     assert.equal(app.approvals()[0].version, 3);
   });
+});
+
+test('late failure from a signed-out session cannot clear a new session queue', async () => {
+  const old = deferred();
+  const fresh = deferred();
+  const app = setup({ pendingApprovals: () => old.promise });
+  const previous = app.loadApprovals();
+  app.logout();
+  app.authenticated.set(true);
+  app.api.pendingApprovals = () => fresh.promise;
+  const current = app.loadApprovals();
+  const replacement = { ...approval, id: 'req-2', version: 3 };
+  fresh.resolve([replacement]);
+  await current;
+  old.reject(Error('old session failure'));
+  await previous;
+  assert.deepEqual(app.approvals(), [replacement]);
+  assert.equal(app.approvalsError(), '');
+  assert.equal(app.approvalsLoading(), false);
+});
+
+test('late failure cannot clear a newer spinner or overwrite a newer refresh error', async () => {
+  const old = deferred();
+  const fresh = deferred();
+  const app = setup({ pendingApprovals: () => old.promise });
+  const previous = app.loadApprovals();
+  app.logout();
+  app.authenticated.set(true);
+  app.api.pendingApprovals = () => fresh.promise;
+  const current = app.loadApprovals();
+  old.reject(Error('old session failure'));
+  await previous;
+  assert.equal(app.approvalsLoading(), true);
+  assert.equal(app.approvalsError(), '');
+  fresh.reject(Error('current refresh failure'));
+  await current;
+  assert.equal(app.approvalsError(), 'current refresh failure');
+  assert.deepEqual(app.approvals(), []);
+  assert.equal(app.approvalsLoading(), false);
+});
+
+test('late failure cannot replace an already displayed current refresh error', async () => {
+  const old = deferred();
+  const app = setup({ pendingApprovals: () => old.promise });
+  const previous = app.loadApprovals();
+  app.logout();
+  app.authenticated.set(true);
+  app.api.pendingApprovals = async () => { throw Error('current refresh failure'); };
+  await app.loadApprovals();
+  old.reject(Error('old session failure'));
+  await previous;
+  assert.equal(app.approvalsError(), 'current refresh failure');
+  assert.deepEqual(app.approvals(), []);
+  assert.equal(app.approvalsLoading(), false);
 });
